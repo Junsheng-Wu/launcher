@@ -662,6 +662,8 @@ func syncAnsiblePlan(ctx context.Context, scope *scope.Scope, cli client.Client,
 		// add remove force_delete_nodes,because machine instance has been deleted
 		ansibleNew.Spec.Install.OtherAnsibleOpts["delete_nodes_confirmation"] = "yes"
 		ansibleNew.Spec.Install.OtherAnsibleOpts["force_delete_nodes"] = "yes"
+		// notice: if scale down,node pools can't be changed with plan machines list.
+		ansibleNew.Spec.Install.NodePools = ansibleOld.Spec.Install.NodePools
 	}
 
 	if upgrade || DiffReporter.UpScale || DiffReporter.DownScale {

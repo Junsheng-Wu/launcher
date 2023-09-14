@@ -147,7 +147,7 @@ func StartAnsiblePlan(ctx context.Context, cli client.Client, ansible *ecnsv1.An
 		playbook = "scale.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeUpgrade {
-		playbook = "extra_playbooks/upgrade-etcd-k8s.yml"
+		playbook = "upgrade-cluster.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
 		playbook = "remove-node.yml"

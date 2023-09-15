@@ -160,6 +160,9 @@ spec:
                   - role
                   type: object
                 type: array
+              maxRetryTime:
+                description: Execute ansible plan max retry times.
+                type: integer
               mode:
                 type: string
               monitor:
@@ -244,6 +247,7 @@ spec:
             - k8sVersion
             - lb_enable
             - machine_sets
+            - maxRetryTime
             - mode
             - monitor
             - need_keep_alive

@@ -11,26 +11,25 @@ const (
 	backoffFactor              = 1.25
 	backoffDuration            = 5
 	backoffJitter              = 1.0
+	AnsiblePlanMaxRetryTimes   = 5
+	AnsiblePlanExecuteInterval = 10 * time.Second
 	RetryDeleteClusterInterval = 10 * time.Second
 	DeleteClusterTimeout       = 2 * time.Minute
 )
 
 // Retry retries a given function with exponential backoff.
-func Retry(fn wait.ConditionFunc, initialBackoffSec int) error {
-	if initialBackoffSec <= 0 {
-		initialBackoffSec = backoffDuration
+
+func Retry(maxRetries int, interval time.Duration, operation func() error) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		if err = operation(); err == nil {
+			return nil
+		}
+
+		time.Sleep(interval)
 	}
-	backoffConfig := wait.Backoff{
-		Steps:    backoffSteps,
-		Factor:   backoffFactor,
-		Duration: time.Duration(initialBackoffSec) * time.Second,
-		Jitter:   backoffJitter,
-	}
-	retryErr := wait.ExponentialBackoff(backoffConfig, fn)
-	if retryErr != nil {
-		return retryErr
-	}
-	return nil
+
+	return err
 }
 
 // Poll tries a condition func until it returns true, an error, or the timeout

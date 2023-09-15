@@ -1,6 +1,8 @@
 // Copyright 2022 EasyStack, Inc.
 package controller
 
+import "github.com/pkg/errors"
+
 const (
 	NETATTDEFFINALIZERNAME = "plan.finalizers.eks.io"
 
@@ -14,6 +16,11 @@ const (
 	PlanCreatedEvent      = "PlanCreated"
 	PlanDeleteEvent       = "PlanDeleted"
 	PlanDeleteSshKeyEvent = "AnsiblePlanDeleteSshKey"
+
+)
+
+var (
+	TaskDoingError = errors.New("ansiblePlan is not done,task is doing")
 )
 
 func StringInArray(val string, array []string) bool {

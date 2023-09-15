@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"github.com/pkg/errors"
 	"reflect"
 
 	easystackcomv1 "easystack.com/plan/api/v1"
@@ -26,6 +25,7 @@ import (
 	"easystack.com/plan/pkg/utils"
 
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -132,8 +132,12 @@ func (r *AnsiblePlanReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, ansible *easystackcomv1.AnsiblePlan) (ctrl.Result, error) {
 	log.Info("Reconciling ansible plan resource")
+
 	if ansible.Status.Done {
-		log.Info("ansible plan is done,skip reconcile")
+		log.Info("ansible plan is done, skip reconcile")
+		return ctrl.Result{}, nil
+	} else if ansible.Spec.MaxRetryTime <= ansible.Status.CurrentRetryTime {
+		log.Info("The number of ansible plan retry times has reached the max retry times, skip reconcile.")
 		return ctrl.Result{}, nil
 	}
 
@@ -153,13 +157,21 @@ func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Lo
 
 	err = utils.GetOrCreateVarsFile(ctx, r.Client, ansible)
 	if err != nil {
-		r.EventRecorder.Eventf(ansible, corev1.EventTypeNormal, AnsiblePlanCreatedEvent, "Create inventory file failed: %s", err.Error())
+		r.EventRecorder.Eventf(ansible, corev1.EventTypeNormal, AnsiblePlanCreatedEvent, "Create vars file failed: %s", err.Error())
 		return ctrl.Result{}, err
 	}
-	r.EventRecorder.Eventf(ansible, corev1.EventTypeNormal, AnsiblePlanCreatedEvent, "Create inventory file success")
+	r.EventRecorder.Eventf(ansible, corev1.EventTypeNormal, AnsiblePlanCreatedEvent, "Create vars file success")
 
 	//TODO start ansible plan process,write pid log to file
-	err = utils.StartAnsiblePlan(ctx, r.Client, ansible)
+	rt := ansible.Spec.MaxRetryTime - ansible.Status.CurrentRetryTime
+	err = utils.Retry(rt, utils.AnsiblePlanExecuteInterval, func() error {
+		ansible.Status.CurrentRetryTime += 1
+		err = r.Client.Status().Update(ctx, ansible)
+		if err != nil {
+			return err
+		}
+		return utils.StartAnsiblePlan(ctx, r.Client, ansible)
+	})
 	if err != nil {
 		r.EventRecorder.Eventf(ansible, corev1.EventTypeWarning, AnsiblePlanStartEvent, "Ansible plan execute failed: %s", err.Error())
 		ansible.Status.Done = false
@@ -172,7 +184,7 @@ func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Lo
 }
 
 func (r *AnsiblePlanReconciler) reconcileDelete(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, ansible *easystackcomv1.AnsiblePlan) (ctrl.Result, error) {
-
+	//Nothing to do
 	return ctrl.Result{}, nil
 }
 

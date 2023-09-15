@@ -434,6 +434,10 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	// Compare plan with ansiblePlan to update ansiblePlan
 	err = syncAnsiblePlan(ctx, scope, r.Client, plan, &ansiblePlan)
 	if err != nil {
+		if err == TaskDoingError {
+			scope.Logger.Info(TaskDoingError.Error())
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -609,7 +613,7 @@ func syncAnsiblePlan(ctx context.Context, scope *scope.Scope, cli client.Client,
 	ansibleOld.TypeMeta = ansibleNew.TypeMeta
 	// 0. check if ansiblePlan can be updated
 	if !ansibleOld.Status.Done {
-		return errors.New("ansiblePlan is not done,task is doing")
+		return TaskDoingError
 	}
 	// 1. check if upgrade is needed
 	upgrade, err := utils.IsUpgradeNeeded(ansibleOld, &ansibleNew)
@@ -1055,7 +1059,9 @@ func syncServerGroups(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan
 	client, err := openstack.NewComputeV2(scope.ProviderClient, gophercloud.EndpointOpts{
 		Region: scope.ProviderClientOpts.RegionName,
 	})
+
 	client.Microversion = "2.15"
+
 	if err != nil {
 		return "", "", err
 	}
@@ -1318,6 +1324,11 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
+	err = deleteAnsiblePlan(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1536,15 +1547,37 @@ func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.C
 	err := client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: plan.Namespace}, secret)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			log.Log.Info("SSHKeySecert has already been deleted")
+			scope.Logger.Info("SSHKeySecert has already been deleted")
 			return nil
 		}
 	}
 
 	err = client.Delete(ctx, secret)
 	if err != nil {
+		scope.Logger.Error(err, "Delete kubeadmin secert failed.")
 		return err
 	}
 
 	return nil
+}
+
+func deleteAnsiblePlan(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	ansiblePlanName := fmt.Sprintf("%s%s", plan.Name, utils.SSHSecretSuffix)
+	ansiblePlan := &ecnsv1.AnsiblePlan{}
+	err := client.Get(ctx, types.NamespacedName{Name: ansiblePlanName, Namespace: plan.Namespace}, ansiblePlan)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			scope.Logger.Info("ansible plan has already been deleted")
+			return nil
+		}
+	}
+
+	err = client.Delete(ctx, ansiblePlan)
+	if err != nil {
+		scope.Logger.Error(err, "Delete ansible plan failed")
+		return err
+	}
+
+	return nil
+
 }

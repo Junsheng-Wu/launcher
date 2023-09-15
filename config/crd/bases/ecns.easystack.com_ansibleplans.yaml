@@ -137,6 +137,9 @@ spec:
                 required:
                 - bastion
                 type: object
+              maxRetryTime:
+                description: Execute ansible plan max retry times.
+                type: integer
               sshSecret:
                 description: SSHSecret is the ssh secret name
                 type: string
@@ -154,6 +157,7 @@ spec:
             required:
             - autoRun
             - clusterName
+            - maxRetryTime
             - sshSecret
             - supportPython3
             - type
@@ -162,12 +166,16 @@ spec:
           status:
             description: AnsiblePlanStatus defines the observed state of AnsiblePlan
             properties:
+              currentRetryTime:
+                description: Times of ansible plan has been executed.
+                type: integer
               done:
                 description: Done is the flag to indicate the plan is done,which is
                   an antiPattern.if Done is true,don't reconcile again unless the
                   plan operator is to take the initiative in changing the variable
                 type: boolean
             required:
+            - currentRetryTime
             - done
             type: object
         type: object

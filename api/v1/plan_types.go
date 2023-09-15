@@ -137,6 +137,9 @@ type PlanSpec struct {
 
 	// UserInfo is the user of keystone auth
 	UserInfo User `json:"user,omitempty"`
+
+	// Execute ansible plan max retry times.
+	MaxRetryTime int `json:"maxRetryTime"`
 }
 
 // User is the user of keystone auth

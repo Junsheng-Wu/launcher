@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	ecnsv1 "easystack.com/plan/api/v1"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"text/template"
+
+	ecnsv1 "easystack.com/plan/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const AnsibleInventory = `## Configure 'ip' variable to bind kubernetes services on a

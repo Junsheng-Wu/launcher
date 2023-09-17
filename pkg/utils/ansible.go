@@ -140,7 +140,6 @@ func GetOrCreateVarsFile(ctx context.Context, cli client.Client, ansible *ecnsv1
 // 3.WAIT ANSIBLE task RETURN RESULT AND UPDATE ANSIBLE CR DONE=TRUE
 func StartAnsiblePlan(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
 	var playbook string
-	var otherVars string
 	if ansible.Spec.Type == ecnsv1.ExecTypeInstall {
 		playbook = "cluster.yml"
 	}
@@ -152,13 +151,12 @@ func StartAnsiblePlan(ctx context.Context, cli client.Client, ansible *ecnsv1.An
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
 		playbook = "remove-node.yml"
-		otherVars =otherVars + "-e delete_nodes_confirmation=yes -e force_delete_nodes=true"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeReset {
 		playbook = "reset.yml"
 	}
 	var inventory = fmt.Sprintf("/opt/captain/inventory/%s", ansible.UID)
-	cmd := exec.Command("ansible-playbook", "-i", inventory, playbook, "--extra-vars", "@"+fmt.Sprintf("/opt/captain/test/%s.vars", ansible.UID),otherVars, "--flush-cache")
+	cmd := exec.Command("ansible-playbook", "-i", inventory,playbook, "--extra-vars", "@"+fmt.Sprintf("/opt/captain/test/%s.vars", ansible.UID),"-vvv")
 	// TODO cmd.Dir need to be change when python version change.
 	if ansible.Spec.SupportPython3 {
 		cmd.Dir = "/opt/captain3"

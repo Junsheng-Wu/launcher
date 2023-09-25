@@ -187,7 +187,7 @@ func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Lo
 	// if remove node,when ansible plan execute success,delete nodepool and node
 	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
 		// update pool to remove data and wait for next plan reconcile
-		for j, remainNode := range ansible.Spec.Install.KubeNode {
+		for _, remainNode := range ansible.Spec.Install.KubeNode {
 			for i, pool := range ansible.Spec.Install.NodePools {
 				if remainNode == pool.Name {
 

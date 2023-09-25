@@ -34,6 +34,7 @@ bastion ansible_ssh_host={{.Bastion.AnsibleHost}} ansible_host={{.Bastion.Ansibl
 {{.}}
 {{end}}
 [k8s-cluster:children]
+etcd
 kube-master
 kube-node
 [ingress]
@@ -150,7 +151,7 @@ func StartAnsiblePlan(ctx context.Context, cli client.Client, ansible *ecnsv1.An
 		playbook = "upgrade-cluster.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
-		playbook = "remove-node.yml"
+		playbook = "remove-node-eks.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeReset {
 		playbook = "reset.yml"

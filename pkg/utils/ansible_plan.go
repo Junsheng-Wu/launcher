@@ -326,6 +326,7 @@ func PatchAnsiblePlan(ctx context.Context, cli client.Client, cur, mod *ecnsv1.A
 	if err != nil {
 		return fmt.Errorf("failed to patch AnsiblePlan object status %s/%s: %s", cur.Namespace, cur.Name, err)
 	}
+	fmt.Sprintf("patch ansibleplan object: %s/%s", cur.Name, string(patch))
 	// client patch ansible plan object
 	err = cli.Patch(ctx, cur, patchObj)
 	if err != nil {

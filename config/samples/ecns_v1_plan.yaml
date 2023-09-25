@@ -7,14 +7,14 @@ metadata:
     app.kubernetes.io/part-of: easystack-eks-op
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: easystack-eks-op
-  name: plan-sample-fake-1
+  name: plan-sample
   namespace: mj
 spec:
   mode: "new"
   k8sVersion: "v1.26.4-es"
   support_python3: false
   lb_enable: false
-  cluster_name: "test3"
+  cluster_name: "test2"
   ssh_key: "binshan"
   use_float_ip: false
   node_cidr: "10.6.0.0/24"
@@ -105,8 +105,27 @@ spec:
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
           replica: 1
-    - name: "test-prometheus"
+    - name: "test-etcd"
       number: 3
+      role: "etcd"
+      infras:
+        - uid: "bb110"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+            - volume_type: "hdd"
+              volume_size: 10
+              index: 2
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+          image: "kylin-x86-raw-0816"
+          flavor: "8C-8G"
+          replica: 3
+    - name: "test-prometheus"
+      number: 2
       role: "prometheus"
       infras:
         - uid: "bb95"
@@ -123,7 +142,7 @@ spec:
               index: 3
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
-          replica: 3
+          replica: 2
     - name: "test-gpu"
       number: 0
       role: "nvidia-accelerator"
@@ -154,7 +173,7 @@ spec:
   ansible_plan_auto: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABlBAIt2IZO2QgoUJTprY6B1qM6hFcIMjWLNu6AiLva87mjAJ8HmKPy7Bl8xuX42lMugjyPpb4JKVgHQk80YG3LcPgTAPCuT_lnaW2N9DM_98wDlfIH2W9-9CYM9fikKMvz8v0Xi2MNDUz2dFYc8xIDeR8G8Cfq7-9lVkzhJO3G5bvmDq4"
+    token: "gAAAAABlEPaq0BmJYzVMUG0u_QAjhTPb_wkyl-rLhB3NdQbVGPSHslAlPreea0FdxG4G7lVX6mLJTtWoaE4wYD58t_IGTq06ybuxraQ16ROtpfXGXmgbhg0M4QfnKkYgvr5mgbAWz3Dq83Lq5QMlnCHBM6uQoKbQnI3Hhlt1TE_f9i0BWFjr6Os"
     region: "RegionOne"
 
 

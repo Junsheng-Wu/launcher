@@ -628,7 +628,7 @@ func syncAnsiblePlan(ctx context.Context, scope *scope.Scope, cli client.Client,
 	DiffReporter := &utils.DiffReporter{}
 	option := cmpopts.SortSlices(func(i, j *ecnsv1.AnsibleNode) bool { return i.Name < j.Name })
 	ignore := cmpopts.IgnoreFields(ecnsv1.AnsibleNode{}, "MemoryReserve", "AnsibleSSHPrivateKeyFile")
-	cmp.Diff(ansibleOld.Spec.Install.NodePools, ansibleNew.Spec.Install.NodePools, option, ignore, cmp.Reporter(DiffReporter))
+	fmt.Println(cmp.Diff(ansibleOld.Spec.Install.NodePools, ansibleNew.Spec.Install.NodePools, option, ignore, cmp.Reporter(DiffReporter)))
 	if DiffReporter.NodesUpdate || (DiffReporter.UpScale && DiffReporter.DownScale) {
 		return errors.New("Nodes base's information has changed or need scale and remove node once,please check the instance status")
 	} else if DiffReporter.UpScale {

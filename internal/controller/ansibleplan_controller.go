@@ -194,16 +194,11 @@ func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Lo
 					log.Info("After finished,delete node pool", "pool name", pool.Name)
 					// delete nodePool by name
 					ansible.Spec.Install.NodePools = append(ansible.Spec.Install.NodePools[:i], ansible.Spec.Install.NodePools[i+1:]...)
-					// delete node by name
-					if len(ansible.Spec.Install.KubeNode)> 1 {
-						ansible.Spec.Install.KubeNode = append(ansible.Spec.Install.KubeNode[:j], ansible.Spec.Install.KubeNode[j+1:]...)
-					}else{
-						ansible.Spec.Install.KubeNode = []string{}
-					}
-
 				}
 			}
 		}
+		// delete node by name
+		ansible.Spec.Install.KubeNode = []string{}
 	}
 
 	for _, pool := range ansible.Spec.Install.NodePools {

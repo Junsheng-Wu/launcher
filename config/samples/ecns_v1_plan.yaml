@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/part-of: easystack-eks-op
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: easystack-eks-op
-  name: plan-sample-fake
+  name: plan-sample
   namespace: mj
 spec:
   mode: "new"
@@ -20,7 +20,7 @@ spec:
   node_cidr: "10.6.0.0/24"
   other_ansible_opts:
     "cloud_master_vip": "172.35.0.2"
-    "registry_ip": "172.35.0.249"
+    "registry_ip": "172.35.0.73"
     "webhook_enabled": "false"
     "flannel_interface": "ens3"
     "keepalived_interface": "ens3"
@@ -105,8 +105,27 @@ spec:
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
           replica: 1
-    - name: "test-prometheus"
+    - name: "test-etcd"
       number: 3
+      role: "etcd"
+      infras:
+        - uid: "bb110"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+            - volume_type: "hdd"
+              volume_size: 10
+              index: 2
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+          image: "kylin-x86-raw-0816"
+          flavor: "8C-8G"
+          replica: 3
+    - name: "test-prometheus"
+      number: 2
       role: "prometheus"
       infras:
         - uid: "bb95"
@@ -123,12 +142,12 @@ spec:
               index: 3
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
-          replica: 3
-    - name: "test-log"
+          replica: 2
+    - name: "test-gpu"
       number: 0
-      role: "log"
+      role: "nvidia-accelerator"
       infras:
-        - uid: "bb100"
+        - uid: "bb105"
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
@@ -140,7 +159,7 @@ spec:
             - volume_type: "hdd"
               volume_size: 5
               index: 3
-          image: "kylin-x86-raw-0816"
+          image: "eks-kylin-gpu-accelerated-x86_64"
           flavor: "8C-8G"
           replica: 0
   monitor:
@@ -150,10 +169,11 @@ spec:
   cni_type: "flannel"
   pod_cidr: "10.232.0.0/14"
   svc_cidr: "10.222.0.0/16"
+  maxRetryTime: 5
   ansible_plan_auto: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABk_n6wkqnmA-mP2qqZFjLm0vuUmDnS5784m4-ZjMoE438nnYs9qUMz6NbYKFVCpotTWgNfe0IhlYIqnrMTeQaw8cMghGNHsk4tQeLEqQPnt9lNw7SqBqP0An9eZsG6f2naoafcfYd9uxdUxVuWQLVuvdwItzmLUz_Gp9nn_bkTfYGYFJo"
+    token: "gAAAAABlEPaq0BmJYzVMUG0u_QAjhTPb_wkyl-rLhB3NdQbVGPSHslAlPreea0FdxG4G7lVX6mLJTtWoaE4wYD58t_IGTq06ybuxraQ16ROtpfXGXmgbhg0M4QfnKkYgvr5mgbAWz3Dq83Lq5QMlnCHBM6uQoKbQnI3Hhlt1TE_f9i0BWFjr6Os"
     region: "RegionOne"
 
 

@@ -133,6 +133,11 @@ func (r *AnsiblePlanReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Logger, patchHelper *patch.Helper, ansible *easystackcomv1.AnsiblePlan) (ctrl.Result, error) {
 	log.Info("Reconciling ansible plan resource")
 
+	if len(ansible.Spec.Install.KubeNode) == 0 {
+		log.Info("ansible plan kube node is empty, skip reconcile, maybe the node has been removed")
+		return ctrl.Result{}, nil
+	}
+
 	if ansible.Status.Done {
 		log.Info("ansible plan is done, skip reconcile")
 		return ctrl.Result{}, nil
@@ -177,6 +182,32 @@ func (r *AnsiblePlanReconciler) reconcileNormal(ctx context.Context, log logr.Lo
 		ansible.Status.Done = false
 		return ctrl.Result{}, err
 	}
+
+
+	// if remove node,when ansible plan execute success,delete nodepool and node
+	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
+		// update pool to remove data and wait for next plan reconcile
+		for j, remainNode := range ansible.Spec.Install.KubeNode {
+			for i, pool := range ansible.Spec.Install.NodePools {
+				if remainNode == pool.Name {
+
+					log.Info("After finished,delete node pool", "pool name", pool.Name)
+					// delete nodePool by name
+					ansible.Spec.Install.NodePools = append(ansible.Spec.Install.NodePools[:i], ansible.Spec.Install.NodePools[i+1:]...)
+				}
+			}
+		}
+		// delete node by name
+		ansible.Spec.Install.KubeNode = []string{}
+	}
+
+	for _, pool := range ansible.Spec.Install.NodePools {
+		log.Info("node pool", "pool name", pool.Name)
+	}
+	for _, node := range ansible.Spec.Install.KubeNode{
+		log.Info("node", "kube node name", node)
+	}
+
 	r.EventRecorder.Eventf(ansible, corev1.EventTypeWarning, AnsiblePlanStartEvent, "Ansible plan execute success")
 	ansible.Status.Done = true
 

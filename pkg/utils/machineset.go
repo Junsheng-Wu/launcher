@@ -532,7 +532,7 @@ func createMachineset(ctx context.Context, scope *scope.Scope, client client.Cli
 	}
 	machineSet.Spec.Template.Labels = make(map[string]string)
 	machineSet.Spec.Template.Labels["cluster.x-k8s.io/cluster-name"] = plan.Spec.ClusterName
-	if set.Role == ecnsv1.MasterSetRole {
+	if set.Role == ecnsv1.MasterSetRole || set.Role == ecnsv1.Etcd {
 		machineSet.Spec.Template.Labels[ecnsv1.MachineControlPlaneLabelName] = "true"
 	}
 	machineSet.Spec.Template.Spec.Bootstrap.ConfigRef = &corev1.ObjectReference{}

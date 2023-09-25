@@ -34,6 +34,7 @@ bastion ansible_ssh_host={{.Bastion.AnsibleHost}} ansible_host={{.Bastion.Ansibl
 {{.}}
 {{end}}
 [k8s-cluster:children]
+etcd
 kube-master
 kube-node
 [ingress]
@@ -147,16 +148,16 @@ func StartAnsiblePlan(ctx context.Context, cli client.Client, ansible *ecnsv1.An
 		playbook = "scale.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeUpgrade {
-		playbook = "extra_playbooks/upgrade-etcd-k8s.yml"
+		playbook = "upgrade-cluster.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeRemove {
-		playbook = "remove-node.yml"
+		playbook = "remove-node-eks.yml"
 	}
 	if ansible.Spec.Type == ecnsv1.ExecTypeReset {
 		playbook = "reset.yml"
 	}
 	var inventory = fmt.Sprintf("/opt/captain/inventory/%s", ansible.UID)
-	cmd := exec.Command("ansible-playbook", "-i", inventory, playbook, "--extra-vars", "@"+fmt.Sprintf("/opt/captain/test/%s.vars", ansible.UID), "-vvvvv")
+	cmd := exec.Command("ansible-playbook", "-i", inventory,playbook, "--extra-vars", "@"+fmt.Sprintf("/opt/captain/test/%s.vars", ansible.UID),"-vvv")
 	// TODO cmd.Dir need to be change when python version change.
 	if ansible.Spec.SupportPython3 {
 		cmd.Dir = "/opt/captain3"

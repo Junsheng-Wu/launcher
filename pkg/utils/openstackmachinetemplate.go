@@ -50,7 +50,7 @@ func GetAdoptInfra(ctx context.Context, cli client.Client, target *ecnsv1.Machin
 				}
 				// When machine is being Deleting,but openstackmachine is not being deleting, exist race condition
 				// so we need to check this condition and give a err for it
-				if ownerMachine.Annotations[DeleteMachineAnnotation] == "true" && o.ObjectMeta.DeletionTimestamp == nil {
+				if ownerMachine.ObjectMeta.DeletionTimestamp != nil && o.ObjectMeta.DeletionTimestamp == nil {
 					return nil, fmt.Errorf("machine %s is being deleting,but openstackmachine %s is not being deleting,you should check it", ownerMachine.Name, o.Name)
 				}
 

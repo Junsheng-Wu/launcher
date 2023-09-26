@@ -434,10 +434,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	// Compare plan with ansiblePlan to update ansiblePlan
 	err = syncAnsiblePlan(ctx, scope, r.Client, plan, &ansiblePlan)
 	if err != nil {
-		if err == TaskDoingError {
-			scope.Logger.Info(TaskDoingError.Error())
-			return ctrl.Result{}, nil
-		}
 		return ctrl.Result{}, err
 	}
 
@@ -610,11 +606,7 @@ func SetNeedKeepAlived(role string, alive []string) bool {
 func syncAnsiblePlan(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, ansibleOld *ecnsv1.AnsiblePlan) error {
 	ansibleNew := utils.CreateAnsiblePlan(ctx, scope, cli, plan)
 	ansibleOld.ObjectMeta.DeepCopyInto(&ansibleNew.ObjectMeta)
-	ansibleOld.TypeMeta = ansibleNew.TypeMeta
-	// 0. check if ansiblePlan can be updated
-	if !ansibleOld.Status.Done {
-		return TaskDoingError
-	}
+	ansibleNew.TypeMeta = ansibleOld.TypeMeta
 	// 1. check if upgrade is needed
 	upgrade, err := utils.IsUpgradeNeeded(ansibleOld, &ansibleNew)
 	if err != nil {

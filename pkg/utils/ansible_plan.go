@@ -322,16 +322,37 @@ func PatchAnsiblePlan(ctx context.Context, cli client.Client, cur, mod *ecnsv1.A
 		return nil
 	}
 	patchObj := client.RawPatch(types.MergePatchType, patch)
-	fmt.Sprintf("patch ansibleplan object: %s/%s", cur.Name, string(patch))
+	fmt.Println(string(patch))
 	// client patch ansible plan object
 	err = cli.Patch(ctx, cur, patchObj)
 	if err != nil {
 		return fmt.Errorf("failed to patch AnsiblePlan object %s/%s: %s", cur.Namespace, cur.Name, err)
 	}
 	// update status after all job has done
-	err = cli.SubResource("status").Patch(ctx, cur, patchObj)
+	curStatusJSON, err := json.Marshal(cur.Status)
 	if err != nil {
-		return fmt.Errorf("failed to patch AnsiblePlan object status %s/%s: %s", cur.Namespace, cur.Name, err)
+		return fmt.Errorf("failed to serialize current MachineSet object: %s", err)
+	}
+	modStatusJSON, err := json.Marshal(mod.Status)
+	if err != nil {
+		return fmt.Errorf("failed to serialize modified MachineSet object: %s", err)
+	}
+	patchStatus, err := jsonmergepatch.CreateThreeWayJSONMergePatch(curStatusJSON, modStatusJSON, curStatusJSON)
+	if err != nil {
+		return fmt.Errorf("failed to create 2-way merge patch status value: %s", err)
+	}
+	if len(patchStatus) == 0 || string(patchStatus) == "{}" {
+		return nil
+	}
+	patchStatus,err = CreateStatusThreeWayJSONMergePatch(patchStatus)
+	if err != nil {
+		return fmt.Errorf("failed to create 2-way merge patch status: %s", err)
+	}
+	patchStatusObj := client.RawPatch(types.MergePatchType, patchStatus)
+	fmt.Println(string(patchStatus))
+	err = cli.SubResource("status").Patch(ctx, cur, patchStatusObj)
+	if err != nil {
+		return fmt.Errorf("failed to patch AnsiblePlan object status %s/%s: %s %s", cur.Namespace, cur.Name, err,string(patchStatus))
 	}
 	return nil
 }

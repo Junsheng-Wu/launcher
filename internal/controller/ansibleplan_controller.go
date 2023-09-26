@@ -18,12 +18,9 @@ package controller
 
 import (
 	"context"
-	"reflect"
-
 	easystackcomv1 "easystack.com/plan/api/v1"
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/utils"
-
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -33,12 +30,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/cluster-api/util/patch"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // AnsiblePlanReconciler reconciles a AnsiblePlan object
@@ -245,20 +239,6 @@ func (r *AnsiblePlanReconciler) SetupWithManager(mgr ctrl.Manager, options contr
 		WithOptions(options).
 		For(
 			&easystackcomv1.AnsiblePlan{},
-			builder.WithPredicates(
-				predicate.Funcs{
-					// Avoid reconciling if the event triggering the reconciliation is related to incremental status updates
-					UpdateFunc: func(e event.UpdateEvent) bool {
-						oldCluster := e.ObjectOld.(*easystackcomv1.AnsiblePlan).DeepCopy()
-						newCluster := e.ObjectNew.(*easystackcomv1.AnsiblePlan).DeepCopy()
-						oldCluster.Status = easystackcomv1.AnsiblePlanStatus{}
-						newCluster.Status = easystackcomv1.AnsiblePlanStatus{}
-						oldCluster.ObjectMeta.ResourceVersion = ""
-						newCluster.ObjectMeta.ResourceVersion = ""
-						return !reflect.DeepEqual(oldCluster, newCluster)
-					},
-				},
-			),
 		).
 		Complete(r)
 }

@@ -1,8 +1,6 @@
 // Copyright 2022 EasyStack, Inc.
 package controller
 
-import "github.com/pkg/errors"
-
 const (
 	NETATTDEFFINALIZERNAME = "plan.finalizers.eks.io"
 
@@ -19,9 +17,6 @@ const (
 
 )
 
-var (
-	TaskDoingError = errors.New("ansiblePlan is not done,task is doing")
-)
 
 func StringInArray(val string, array []string) bool {
 	for i := range array {

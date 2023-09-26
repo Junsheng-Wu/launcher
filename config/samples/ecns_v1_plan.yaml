@@ -68,7 +68,7 @@ spec:
           flavor: "8C-8G"
           replica: 1
     - name: "test-node"
-      number: 1
+      number: 0
       role: "node"
       infras:
         - uid: "bb85"
@@ -85,7 +85,7 @@ spec:
               index: 3
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
-          replica: 1
+          replica: 0
     - name: "test-ingress"
       number: 1
       role: "ingress"
@@ -173,7 +173,7 @@ spec:
   ansible_plan_auto: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABlEPaq0BmJYzVMUG0u_QAjhTPb_wkyl-rLhB3NdQbVGPSHslAlPreea0FdxG4G7lVX6mLJTtWoaE4wYD58t_IGTq06ybuxraQ16ROtpfXGXmgbhg0M4QfnKkYgvr5mgbAWz3Dq83Lq5QMlnCHBM6uQoKbQnI3Hhlt1TE_f9i0BWFjr6Os"
+    token: "gAAAAABlEkDUH45Xbmh7MfgEsfZ2mNNUlqBhlCovedsscZSfrrmDkc85-8ZgMS8u4pNLdDA5BPzwq7jD5p_rWA8U3DwPNYnzdnc8SJZT4yy_CcNbH9uE1YiPqOJwQ9YlslLncc3fMcqjIMc4iGiIcZ_0i2ujl1LxSwLUJaVno_TmSZUeKVfNQmg"
     region: "RegionOne"
 
 

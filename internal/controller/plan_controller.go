@@ -1053,7 +1053,7 @@ func syncServerGroups(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan
 		Region: scope.ProviderClientOpts.RegionName,
 	})
 
-	client.Microversion = "2.79"
+	client.Microversion = "2.15"
 
 	if err != nil {
 		return "", "", err

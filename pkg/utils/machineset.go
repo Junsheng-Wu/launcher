@@ -303,6 +303,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 			secretName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc")
 			openstackTemplate.Spec.Template.Spec.IdentityRef.Kind = "Secret"
 			openstackTemplate.Spec.Template.Spec.IdentityRef.Name = secretName
+			openstackTemplate.Spec.Template.Spec.DeleteVolumeOnTermination = plan.Spec.DeleteVolumeOnTermination
 			openstackTemplate.Spec.Template.Spec.RootVolume = &clusteropenstack.RootVolume{}
 			for _, volume := range infra.Volumes {
 				if volume.Index == 1 {

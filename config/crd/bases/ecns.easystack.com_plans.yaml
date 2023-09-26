@@ -48,6 +48,10 @@ spec:
               cni_work_mode:
                 description: CniWorkMode is the cni work mode
                 type: string
+              deleteVolumeOnTermination:
+                description: DeleteVolumeOnTermination is the flag to decide to delete
+                  volume on termination
+                type: boolean
               dns_nameservers:
                 description: DNSNameservers is the dns nameservers of subnet which
                   auto created
@@ -648,6 +652,9 @@ spec:
                                 type: string
                             type: object
                           type: array
+                        deleteVolumeOnTermination:
+                          description: The volume delete on termination
+                          type: boolean
                         flavor:
                           description: The flavor reference for the flavor for your
                             server instance.

@@ -931,6 +931,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 			openstackCluster.Spec.Bastion.Instance.IdentityRef = &clusteropenstackapis.OpenStackIdentityReference{}
 			openstackCluster.Spec.Bastion.Instance.IdentityRef.Kind = "Secret"
 			openstackCluster.Spec.Bastion.Instance.IdentityRef.Name = secretName
+			openstackCluster.Spec.Bastion.Instance.DeleteVolumeOnTermination = plan.Spec.DeleteVolumeOnTermination
 			openstackCluster.Spec.Bastion.Instance.RootVolume = &clusteropenstackapis.RootVolume{}
 			for index, volume := range MSet.Infra[0].Volumes {
 				// bastion only set rootVolume because image use masterSet image
@@ -1052,7 +1053,7 @@ func syncServerGroups(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan
 		Region: scope.ProviderClientOpts.RegionName,
 	})
 
-	client.Microversion = "2.15"
+	client.Microversion = "2.79"
 
 	if err != nil {
 		return "", "", err

@@ -171,9 +171,10 @@ spec:
   svc_cidr: "10.222.0.0/16"
   maxRetryTime: 5
   ansible_plan_auto: true
+  deleteVolumeOnTermination: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABlEkDUH45Xbmh7MfgEsfZ2mNNUlqBhlCovedsscZSfrrmDkc85-8ZgMS8u4pNLdDA5BPzwq7jD5p_rWA8U3DwPNYnzdnc8SJZT4yy_CcNbH9uE1YiPqOJwQ9YlslLncc3fMcqjIMc4iGiIcZ_0i2ujl1LxSwLUJaVno_TmSZUeKVfNQmg"
+    token: "gAAAAABlEpbVA2fOaWDLer_WLjjau_Hv-7H6VfnlwdVTk4y-3kNTH5_WRJwa97eev7BfHApJVM_ak3PKDnDMWZ34v-pCjskjlh4-1DZf2tqj228IMAKuUC-XXLT9oJTjWYZJ0-Zfs6IMDVQOqJ95Q5bFF9KJwdfSaGFw8TR0C1PbB63vPXk4Uc4"
     region: "RegionOne"
 
 

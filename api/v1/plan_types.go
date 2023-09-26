@@ -140,6 +140,9 @@ type PlanSpec struct {
 
 	// Execute ansible plan max retry times.
 	MaxRetryTime int `json:"maxRetryTime"`
+
+	// DeleteVolumeOnTermination is the flag to decide to delete volume on termination
+	DeleteVolumeOnTermination bool `json:"deleteVolumeOnTermination,omitempty"`
 }
 
 // User is the user of keystone auth

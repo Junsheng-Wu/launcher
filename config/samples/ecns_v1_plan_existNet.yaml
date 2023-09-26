@@ -96,7 +96,9 @@ spec:
   cni_type: "flannel"
   pod_cidr: "10.232.0.0/14"
   svc_cidr: "10.222.0.0/16"
+  maxRetryTime: 5
   ansible_plan_auto: false
+  deleteVolumeOnTermination: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
     token: "gAAAAABk5Ci3zfmRBss2Ho93Wv8To6vI8oVQPtxDcJ5rnih0QixQj_YqLEpuaLHll5JvCnxm3l2fvlLWi7htPh44uCUBz3YvJ_KbUaFoIQmHnQBU_CAKa1YO8EUg3cwZB1wNvqp1fCqQDyzJB-quL-GiFbSiGe4GOydtZbwoV2j1dOBwFHDytSk"

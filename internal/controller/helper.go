@@ -14,9 +14,7 @@ const (
 	PlanCreatedEvent      = "PlanCreated"
 	PlanDeleteEvent       = "PlanDeleted"
 	PlanDeleteSshKeyEvent = "AnsiblePlanDeleteSshKey"
-
 )
-
 
 func StringInArray(val string, array []string) bool {
 	for i := range array {

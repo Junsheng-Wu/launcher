@@ -62,7 +62,7 @@ node_resources:
   {{range .Install.NodePools}}
   {{.Name}}: {memory: {{.MemoryReserve}}}
   {{end}}
-hyperkube_image_tag: {{.Version}}
+kube_version: {{.Version}}
 {{range $key, $value := .Install.OtherAnsibleOpts}}
 {{$key}}: {{$value}}
 {{end}}

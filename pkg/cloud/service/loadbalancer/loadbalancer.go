@@ -17,12 +17,13 @@ limitations under the License.
 package loadbalancer
 
 import (
-	ecnsv1 "easystack.com/plan/api/v1"
-	"easystack.com/plan/pkg/utils/openstack"
 	"errors"
 	"fmt"
 	"reflect"
 	"time"
+
+	ecnsv1 "easystack.com/plan/api/v1"
+	"easystack.com/plan/pkg/utils/openstack"
 
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/loadbalancers"

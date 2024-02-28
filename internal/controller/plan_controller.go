@@ -26,6 +26,8 @@ import (
 	"text/template"
 	"time"
 
+	"encoding/base64"
+
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/cloud/service/loadbalancer"
 	"easystack.com/plan/pkg/cloud/service/networking"
@@ -33,7 +35,6 @@ import (
 	"easystack.com/plan/pkg/cloudinit"
 	"easystack.com/plan/pkg/scope"
 	"easystack.com/plan/pkg/utils"
-	"encoding/base64"
 	clusteropenstackapis "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusteropenstackerrors "github.com/easystack/cluster-api-provider-openstack/pkg/utils/errors"
 	"github.com/gophercloud/gophercloud"
@@ -48,7 +49,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
-	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	clusterkubeadm "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	clusterutils "sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/patch"
@@ -147,19 +147,20 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 	}
 	log = log.WithValues("plan", plan.Name)
 
-	if plan.Spec.Paused == true {
+	if plan.Spec.Paused {
 		cluster, err1 := clusterutils.GetClusterByName(ctx, r.Client, plan.Spec.ClusterName, plan.Namespace)
 		if err1 == nil {
-			log = log.WithValues("cluster", cluster.Name)
 			if cluster == nil {
 				log.Info("Cluster Controller has not yet set OwnerRef")
 				return reconcile.Result{}, nil
+			} else {
+				log = log.WithValues("cluster", cluster.Name)
 			}
 			// set cluster.Spec.Paused = true
 			// first get the clusterv1.Cluster, then set cluster.Spec.Paused = true
 			// then update the cluster
 			// Fetch the Cluster.
-			if cluster.Spec.Paused == true {
+			if cluster.Spec.Paused {
 				log.Info("Cluster is already paused")
 				return ctrl.Result{}, nil
 			} else {
@@ -167,14 +168,13 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 				if err1 = r.Client.Update(ctx, cluster); err1 != nil {
 					return ctrl.Result{}, err1
 				}
-
 			}
 		}
 		return ctrl.Result{}, nil
 	} else {
 		cluster, err1 := clusterutils.GetClusterByName(ctx, r.Client, plan.Spec.ClusterName, plan.Namespace)
 		if err1 == nil {
-			if cluster.Spec.Paused == true {
+			if cluster.Spec.Paused {
 				cluster.Spec.Paused = false
 				if err1 = r.Client.Update(ctx, cluster); err != nil {
 					return ctrl.Result{}, err1
@@ -253,10 +253,10 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 	}()
 
 	// Handle non-deleted clusters
-	return r.reconcileNormal(ctx, scope, patchHelper, plan)
+	return r.reconcileNormal(ctx, scope, plan)
 }
 
-func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope, patchHelper *patch.Helper, plan *ecnsv1.Plan) (_ ctrl.Result, reterr error) {
+func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) (_ ctrl.Result, reterr error) {
 	var skipReconcile bool
 	for _, reason := range plan.Status.VMFailureReason {
 		if reason.Type == ecnsv1.InstanceError {
@@ -270,36 +270,38 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 
 	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanStartEvent, "Start plan")
 	scope.Logger.Info("Reconciling plan openstack resource")
+	// get or create application credential
 	err := syncAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	// get or create sshkeys secret
 	err = syncSSH(ctx, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	//TODO  get or create cluster.cluster.x-k8s.io
+
+	// get or create cluster.cluster.x-k8s.io
 	err = syncCreateCluster(ctx, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	var masterM *ecnsv1.MachineSetReconcile
-
-	for _, set := range plan.Spec.MachineSets {
-		if set.Role == ecnsv1.MasterSetRole {
-			masterM = set
-		}
-	}
 	//TODO  get or create openstackcluster.infrastructure.cluster.x-k8s.io
-	err = syncCreateOpenstackCluster(ctx, r.Client, plan, masterM)
+	err = syncCreateOpenstackCluster(ctx, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
+	//TODO  get or create KubeadmConfig ,no use
+	// err = syncCreateKubeadmConfig(ctx, r.Client, plan)
+	// if err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
 	//TODO  get or create server groups,master one,work one
-	mastergroupID, nodegroupID, err := syncServerGroups(ctx, scope, plan)
+	mastergroupID, nodegroupID, err := syncServerGroups(scope, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -351,13 +353,13 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 				}
 			}
 		}
-
 	}
 	// Reconcile every machineset replicas
 	err = r.syncMachine(ctx, scope, r.Client, plan, mastergroupID, nodegroupID)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	// move to syncServerGroups
 	plan.Status.ServerGroupID = &ecnsv1.Servergroups{}
 	plan.Status.ServerGroupID.MasterServerGroupID = mastergroupID
 	plan.Status.ServerGroupID.WorkerServerGroupID = nodegroupID
@@ -651,7 +653,7 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 
 // TODO sync app cre
 func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
-	// TODO get openstack application credential secret by name  If not exist,then create openstack application credential and its secret.
+	// TODO get openstack application credential secret by name If not exist,then create openstack application credential and its secret.
 	// create openstack application credential
 	var (
 		secretName = fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix)
@@ -697,7 +699,7 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 			}
 			// base64 encode the buffer contents and return as a string
 			secretData["clouds.yaml"] = buf.Bytes()
-			secretData["cacert"] = []byte(fmt.Sprintf("\n"))
+			secretData["cacert"] = []byte("\n")
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      secretName,
@@ -728,14 +730,32 @@ func syncCreateCluster(ctx context.Context, client client.Client, plan *ecnsv1.P
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// TODO create cluster resource
-			cluster.Labels = make(map[string]string, 1)
-			cluster.Labels[utils.LabelEasyStackPlan] = plan.Name
-			cluster.Name = plan.Spec.ClusterName
-			cluster.Namespace = plan.Namespace
-			cluster.Spec.ClusterNetwork = &clusterapi.ClusterNetwork{}
-			cluster.Spec.ClusterNetwork.Pods = &clusterapi.NetworkRanges{}
-			cluster.Spec.ClusterNetwork.Pods.CIDRBlocks = []string{plan.Spec.PodCidr}
-			cluster.Spec.ClusterNetwork.ServiceDomain = "cluster.local"
+			cluster = clusterapi.Cluster{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "cluster.x-k8s.io/v1alpha1",
+					Kind:       "Cluster",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      plan.Spec.ClusterName,
+					Namespace: plan.Namespace,
+					Labels: map[string]string{
+						utils.LabelEasyStackPlan: plan.Name,
+					},
+				},
+				Spec: clusterapi.ClusterSpec{
+					ClusterNetwork: &clusterapi.ClusterNetwork{
+						Pods: &clusterapi.NetworkRanges{
+							CIDRBlocks: []string{plan.Spec.PodCidr},
+						},
+						ServiceDomain: "cluster.local",
+					},
+					InfrastructureRef: &corev1.ObjectReference{
+						APIVersion: "infrastructure.cluster.x-k8s.io/v1alpha6",
+						Kind:       "OpenStackCluster",
+						Name:       plan.Spec.ClusterName,
+					},
+				},
+			}
 			// if LBEnable is true,dont set the ControlPlaneEndpoint
 			// else set the ControlPlaneEndpoint to keepalived VIP
 			if !plan.Spec.LBEnable {
@@ -744,10 +764,7 @@ func syncCreateCluster(ctx context.Context, client client.Client, plan *ecnsv1.P
 					Port: 6443,
 				}
 			}
-			cluster.Spec.InfrastructureRef = &corev1.ObjectReference{}
-			cluster.Spec.InfrastructureRef.APIVersion = "infrastructure.cluster.x-k8s.io/v1alpha6"
-			cluster.Spec.InfrastructureRef.Kind = "OpenStackCluster"
-			cluster.Spec.InfrastructureRef.Name = plan.Spec.ClusterName
+
 			err := client.Create(ctx, &cluster)
 			if err != nil {
 				return err
@@ -760,7 +777,15 @@ func syncCreateCluster(ctx context.Context, client client.Client, plan *ecnsv1.P
 }
 
 // Todo sync create openstackcluster
-func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan *ecnsv1.Plan, MSet *ecnsv1.MachineSetReconcile) error {
+func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan *ecnsv1.Plan) error {
+
+	var MSet *ecnsv1.MachineSetReconcile
+
+	for _, set := range plan.Spec.MachineSets {
+		if set.Role == ecnsv1.MasterSetRole {
+			MSet = set
+		}
+	}
 	//TODO get openstackcluster by name  If not exist,then create openstackcluster
 	openstackCluster := clusteropenstackapis.OpenStackCluster{}
 	err := client.Get(ctx, types.NamespacedName{Name: plan.Spec.ClusterName, Namespace: plan.Namespace}, &openstackCluster)
@@ -777,29 +802,62 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				return err
 			}
 
-			var eksInput cloudinit.EKSInput
-			sshBase64 := base64.StdEncoding.EncodeToString(sshKey.Data["public_key"])
-			eksInput.WriteFiles = append(eksInput.WriteFiles, bootstrapv1.File{
-				Path:        "/root/.ssh/authorized_keys",
-				Owner:       "root:root",
-				Permissions: "0644",
-				Encoding:    bootstrapv1.Base64,
-				Append:      true,
-				Content:     sshBase64,
-			})
-
-			eksInput.PreKubeadmCommands = append(eksInput.PreKubeadmCommands, "sed -i '/^#.*AllowTcpForwarding/s/^#//' /etc/ssh/sshd_config")
-			eksInput.PreKubeadmCommands = append(eksInput.PreKubeadmCommands, "sed -i '/^AllowTcpForwarding/s/no/yes/' /etc/ssh/sshd_config")
-
-			eksInput.PostKubeadmCommands = append(eksInput.PostKubeadmCommands, "service sshd restart")
+			var eksInput = cloudinit.EKSInput{
+				BaseUserData: cloudinit.BaseUserData{
+					WriteFiles: []clusterkubeadm.File{{
+						Path:        "/root/.ssh/authorized_keys",
+						Owner:       "root:root",
+						Permissions: "0644",
+						Encoding:    clusterkubeadm.Base64,
+						Append:      true,
+						Content:     base64.StdEncoding.EncodeToString(sshKey.Data["public_key"]),
+					}},
+					PreKubeadmCommands: []string{
+						"sed -i '/^#.*AllowTcpForwarding/s/^#//' /etc/ssh/sshd_config",
+						"sed -i '/^AllowTcpForwarding/s/no/yes/' /etc/ssh/sshd_config",
+						"service sshd restart",
+					},
+				},
+			}
 
 			bastionUserData, err := cloudinit.NewEKS(&eksInput)
 			if err != nil {
 				return err
 			}
 
-			openstackCluster.Name = plan.Spec.ClusterName
-			openstackCluster.Namespace = plan.Namespace
+			openstackCluster = clusteropenstackapis.OpenStackCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      plan.Spec.ClusterName,
+					Namespace: plan.Namespace,
+				},
+				Spec: clusteropenstackapis.OpenStackClusterSpec{
+					CloudName:             plan.Spec.ClusterName,
+					DNSNameservers:        plan.Spec.DNSNameservers,
+					ManagedSecurityGroups: true,
+					IdentityRef: &clusteropenstackapis.OpenStackIdentityReference{
+						Kind: "Secret",
+						Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix),
+					},
+					Bastion: &clusteropenstackapis.Bastion{
+						Enabled:          true,
+						UserData:         string(bastionUserData),
+						AvailabilityZone: MSet.Infra[0].AvailabilityZone,
+						Instance: clusteropenstackapis.OpenStackMachineSpec{
+							Flavor:     MSet.Infra[0].Flavor,
+							Image:      MSet.Infra[0].Image,
+							SSHKeyName: plan.Spec.SshKey,
+							CloudName:  plan.Spec.ClusterName,
+							IdentityRef: &clusteropenstackapis.OpenStackIdentityReference{
+								Kind: "Secret",
+								Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix),
+							},
+							DeleteVolumeOnTermination: plan.Spec.DeleteVolumeOnTermination,
+						},
+					},
+					AllowAllInClusterTraffic: false,
+				},
+			}
+
 			if plan.Spec.LBEnable {
 				openstackCluster.Spec.APIServerLoadBalancer.Enabled = true
 				if isFusionArchitecture(plan.Spec.MachineSets) {
@@ -813,9 +871,8 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				openstackCluster.Spec.ControlPlaneEndpoint.Host = "0.0.0.0"
 				openstackCluster.Spec.ControlPlaneEndpoint.Port = 6443
 			}
-			openstackCluster.Spec.CloudName = plan.Spec.ClusterName
-			openstackCluster.Spec.DNSNameservers = plan.Spec.DNSNameservers
-			if plan.Spec.UseFloatIP == true {
+
+			if plan.Spec.UseFloatIP {
 				openstackCluster.Spec.DisableAPIServerFloatingIP = false
 				openstackCluster.Spec.DisableFloatingIP = false
 				openstackCluster.Spec.ExternalNetworkID = plan.Spec.ExternalNetworkId
@@ -824,7 +881,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				openstackCluster.Spec.DisableFloatingIP = true
 				openstackCluster.Spec.ExternalNetworkID = ""
 			}
-			openstackCluster.Spec.ManagedSecurityGroups = true
+
 			if plan.Spec.NetMode == ecnsv1.NetWorkNew {
 				openstackCluster.Spec.NodeCIDR = plan.Spec.NodeCIDR
 			} else {
@@ -833,24 +890,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				openstackCluster.Spec.Network.ID = MSet.Infra[0].Subnets.SubnetNetwork
 				openstackCluster.Spec.Subnet.ID = MSet.Infra[0].Subnets.SubnetUUID
 			}
-			openstackCluster.Spec.IdentityRef = &clusteropenstackapis.OpenStackIdentityReference{}
-			openstackCluster.Spec.IdentityRef.Kind = "Secret"
-			secretName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix)
-			openstackCluster.Spec.IdentityRef.Name = secretName
-			openstackCluster.Spec.Bastion = &clusteropenstackapis.Bastion{}
-			openstackCluster.Spec.Bastion.Enabled = true
-			openstackCluster.Spec.Bastion.UserData = string(bastionUserData)
-			openstackCluster.Spec.Bastion.AvailabilityZone = MSet.Infra[0].AvailabilityZone
-			openstackCluster.Spec.Bastion.Instance = clusteropenstackapis.OpenStackMachineSpec{}
-			openstackCluster.Spec.Bastion.Instance.Flavor = MSet.Infra[0].Flavor
-			openstackCluster.Spec.Bastion.Instance.Image = MSet.Infra[0].Image
-			openstackCluster.Spec.Bastion.Instance.SSHKeyName = plan.Spec.SshKey
-			openstackCluster.Spec.Bastion.Instance.CloudName = plan.Spec.ClusterName
-			openstackCluster.Spec.Bastion.Instance.IdentityRef = &clusteropenstackapis.OpenStackIdentityReference{}
-			openstackCluster.Spec.Bastion.Instance.IdentityRef.Kind = "Secret"
-			openstackCluster.Spec.Bastion.Instance.IdentityRef.Name = secretName
-			openstackCluster.Spec.Bastion.Instance.DeleteVolumeOnTermination = plan.Spec.DeleteVolumeOnTermination
-			openstackCluster.Spec.Bastion.Instance.RootVolume = &clusteropenstackapis.RootVolume{}
+
 			for index, volume := range MSet.Infra[0].Volumes {
 				// bastion only set rootVolume because image use masterSet image
 				if volume.Index == 1 {
@@ -858,6 +898,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 					openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = MSet.Infra[0].Volumes[index].VolumeType
 				}
 			}
+
 			if plan.Spec.NetMode == ecnsv1.NetWorkExist {
 				openstackCluster.Spec.Bastion.Instance.Networks = []clusteropenstackapis.NetworkParam{
 					{
@@ -866,21 +907,22 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 						},
 					},
 				}
-				openstackCluster.Spec.Bastion.Instance.Ports = []clusteropenstackapis.PortOpts{}
-				openstackCluster.Spec.Bastion.Instance.Ports = append(openstackCluster.Spec.Bastion.Instance.Ports, clusteropenstackapis.PortOpts{
-					Network: &clusteropenstackapis.NetworkFilter{
-						ID: MSet.Infra[0].Subnets.SubnetNetwork,
-					},
-					FixedIPs: []clusteropenstackapis.FixedIP{
-						{
-							Subnet: &clusteropenstackapis.SubnetFilter{
-								ID: MSet.Infra[0].Subnets.SubnetUUID,
+				openstackCluster.Spec.Bastion.Instance.Ports = []clusteropenstackapis.PortOpts{
+					{
+						Network: &clusteropenstackapis.NetworkFilter{
+							ID: MSet.Infra[0].Subnets.SubnetNetwork,
+						},
+						FixedIPs: []clusteropenstackapis.FixedIP{
+							{
+								Subnet: &clusteropenstackapis.SubnetFilter{
+									ID: MSet.Infra[0].Subnets.SubnetUUID,
+								},
 							},
 						},
 					},
-				})
+				}
 			}
-			openstackCluster.Spec.AllowAllInClusterTraffic = false
+
 			err = client.Create(ctx, &openstackCluster)
 			if err != nil {
 				return err
@@ -902,58 +944,9 @@ func isFusionArchitecture(sets []*ecnsv1.MachineSetReconcile) bool {
 	return true
 }
 
-// TODO sync create kubeadmconfig
-func syncCreateKubeadmConfig(ctx context.Context, client client.Client, plan *ecnsv1.Plan) error {
-	//TODO get kubeadmconfig by name  If not exist,then create kubeadmconfig
-	kubeadmconfigte := &clusterkubeadm.KubeadmConfigTemplate{}
-	err := client.Get(ctx, types.NamespacedName{Name: plan.Spec.ClusterName, Namespace: plan.Namespace}, kubeadmconfigte)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			//TODO create kubeadmconfig resource
-			kubeadmconfigte.Name = plan.Spec.ClusterName
-			kubeadmconfigte.Namespace = plan.Namespace
-			kubeadmconfigte.Spec.Template.Spec.Format = "cloud-config"
-			kubeadmconfigte.Spec.Template.Spec.Files = []clusterkubeadm.File{
-				{
-					Path:        "/etc/kubernetes/cloud-config",
-					Content:     "Cg==",
-					Encoding:    "base64",
-					Owner:       "root",
-					Permissions: "0600",
-				},
-				{
-					Path:        "/etc/certs/cacert",
-					Content:     "Cg==",
-					Encoding:    "base64",
-					Owner:       "root",
-					Permissions: "0600",
-				},
-			}
-			kubeadmconfigte.Spec.Template.Spec.JoinConfiguration = &clusterkubeadm.JoinConfiguration{
-				NodeRegistration: clusterkubeadm.NodeRegistrationOptions{
-					Name: "'{{ local_hostname }}'",
-					KubeletExtraArgs: map[string]string{
-						"cloud-provider": "external",
-						"cloud-config":   "/etc/kubernetes/cloud-config",
-					},
-				},
-			}
-
-			err = client.Create(ctx, kubeadmconfigte)
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-	}
-
-	return nil
-
-}
-
 // TODO sync ssh key
 func syncSSH(ctx context.Context, client client.Client, plan *ecnsv1.Plan) error {
-	// TODO get ssh secret by name  If not exist,then create ssh key
+	// TODO get ssh secret by name If not exist,then create ssh key
 	_, _, err := utils.GetOrCreateSSHKeySecret(ctx, client, plan)
 	if err != nil {
 		return err
@@ -963,7 +956,7 @@ func syncSSH(ctx context.Context, client client.Client, plan *ecnsv1.Plan) error
 }
 
 // TODO sync create  server group
-func syncServerGroups(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) (string, string, error) {
+func syncServerGroups(scope *scope.Scope, plan *ecnsv1.Plan) (string, string, error) {
 	//TODO get server group by name  If not exist,then create server group
 	// 1. get openstack client
 
@@ -1208,7 +1201,7 @@ func (r *PlanReconciler) SetupWithManager(mgr ctrl.Manager, options controller.O
 
 func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	// List all machineset for this plan
-	err := deleteHA(ctx, r.Client, scope, plan)
+	err := deleteHA(scope, plan)
 	if err != nil {
 		return err
 	}
@@ -1246,7 +1239,7 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	return nil
 }
 
-func deleteHA(ctx context.Context, cli client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	if plan.Spec.LBEnable {
 		// cluster delete has delete lb
 		service, err := loadbalancer.NewService(scope)
@@ -1286,6 +1279,7 @@ func deleteHA(ctx context.Context, cli client.Client, scope *scope.Scope, plan *
 	}
 	return nil
 }
+
 func deleteSeverGroup(ctx context.Context, cli client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	op, err := openstack.NewComputeV2(scope.ProviderClient, gophercloud.EndpointOpts{
 		Region: scope.ProviderClientOpts.RegionName,

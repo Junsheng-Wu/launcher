@@ -13,9 +13,9 @@ require (
 	github.com/onsi/gomega v1.27.5
 	github.com/pkg/errors v0.9.1
 	golang.org/x/crypto v0.9.0
-	k8s.io/api v0.26.1
-	k8s.io/apimachinery v0.26.1
-	k8s.io/client-go v0.26.1
+	k8s.io/api v0.26.4
+	k8s.io/apimachinery v0.26.4
+	k8s.io/client-go v0.26.4
 	k8s.io/klog/v2 v2.80.1
 	k8s.io/utils v0.0.0-20221128185143-99ec85e7a448
 	sigs.k8s.io/cluster-api v1.3.1
@@ -23,7 +23,11 @@ require (
 	sigs.k8s.io/yaml v1.3.0
 )
 
-require github.com/google/go-cmp v0.5.9
+require (
+	github.com/google/go-cmp v0.5.9
+	github.com/heimdalr/dag v1.4.0
+	github.com/kubean-io/kubean-api v0.13.1
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -32,6 +36,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
+	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect

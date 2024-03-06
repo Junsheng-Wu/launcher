@@ -2,4 +2,6 @@
 resources:
 - ecns_v1_plan.yaml
 - _v1_ansibleplan.yaml
+- ecns.easystack.com_v1_clusteroperationset.yaml
+- _v1_clusteroperationset.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

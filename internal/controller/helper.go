@@ -10,6 +10,12 @@ const (
 	AnsiblePlanDeleteEvent       = "AnsiblePlanDeleted"
 	AnsiblePlanDeleteSshKeyEvent = "AnsiblePlanDeleteSshKey"
 
+	ClusterOperationSetStartEvent  = "ClusterOperationSetStart"
+	ClusterOperationSetCreateEvent = "ClusterOperationSetCreate"
+	ClusterOperationSetUpdateEvent = "ClusterOperationSetUpdate"
+	ClusterOperationSetDeleteEvent = "ClusterOperationSetDelete"
+	ClusterOperationsDeleteEvent   = "ClusterOperationsDelete"
+
 	PlanStartEvent        = "PlanStart"
 	PlanCreatedEvent      = "PlanCreated"
 	PlanDeleteEvent       = "PlanDeleted"

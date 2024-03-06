@@ -1,0 +1,47 @@
+apiVersion: ecns.easystack.com/v1
+kind: ClusterOperationSet
+metadata:
+  labels:
+    app.kubernetes.io/name: clusteroperationset
+    app.kubernetes.io/instance: clusteroperationset-sample
+    app.kubernetes.io/part-of: easystack-eks-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: easystack-eks-op
+  name: clusteroperationset-test
+  namespace: wjs
+spec:
+  clusterOperations:
+  - action: cluster.yml
+    name: ops-1
+    namespace: wjs
+    actionSource: builtin
+    actionType: playbook
+    cluster: cluster-mini
+    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
+    preHook:
+    - actionType: shell
+      action: "echo hello"
+  - action: cluster.yml
+    name: ops-1
+    namespace: wjs
+    actionSource: builtin
+    actionType: playbook
+    cluster: cluster-mini
+    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
+    preHook:
+    - actionType: shell
+      action: "echo hello"
+  - action: cluster.yml
+    name: ops-1
+    namespace: wjs
+    actionSource: builtin
+    actionType: playbook
+    cluster: cluster-mini
+    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
+    preHook:
+    - actionType: shell
+      action: "echo hello"
+  sideMap:
+    ops-1: ops-2
+    ops-2: ops-3
+  timeout: 3600

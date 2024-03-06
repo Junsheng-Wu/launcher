@@ -38,6 +38,8 @@ const (
 
 	AnsibleFinalizer = "ansible.ecns.easystack.com"
 
+	ClusterOperationSetFinalizer = "clusteroperationset.ecns.easystack.com"
+
 	// MachineControlPlaneLabelName is the label set on machines or related objects that are part of a control plane.
 	MachineControlPlaneLabelName = "cluster.x-k8s.io/control-plane"
 )

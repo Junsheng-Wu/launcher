@@ -36,8 +36,6 @@ import (
 	"encoding/base64"
 	clusteropenstackapis "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusteropenstackerrors "github.com/easystack/cluster-api-provider-openstack/pkg/utils/errors"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
@@ -137,6 +135,10 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		deletion = false
 		log      = log.FromContext(ctx)
 	)
+
+	if req.Namespace != "wjs" {
+		return ctrl.Result{}, nil
+	}
 
 	// Fetch the OpenStackMachine instance.
 
@@ -363,11 +365,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	plan.Status.ServerGroupID.MasterServerGroupID = mastergroupID
 	plan.Status.ServerGroupID.WorkerServerGroupID = nodegroupID
 
-	err = utils.WaitAnsiblePlan(ctx, scope, r.Client, plan)
-	if err != nil {
-		plan.Status.VMDone = false
-		return ctrl.Result{}, err
-	}
 	plan.Status.VMDone = true
 	// Update status.InfraMachine and OpenstackMachineList
 	err = updatePlanStatus(ctx, scope, r.Client, plan)
@@ -413,30 +410,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	// TODO check all machineset replicas is ready to num,create ansible plan
 	// 1.create ansiblePLan cr
 	// 2.if ansiblePlan cr existed,which is different in plan to update ansiblePlan cr type and Done field.
-	ansiblePlanName := fmt.Sprintf("%s", plan.Name)
-	var ansiblePlan ecnsv1.AnsiblePlan
-	err = r.Client.Get(ctx, types.NamespacedName{Name: ansiblePlanName, Namespace: plan.Namespace}, &ansiblePlan)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// create ansiblePlan
-			scope.Logger.Info("Create ansiblePlan", "Namespace", plan.Namespace, "Name", ansiblePlanName)
-			ansible := utils.CreateAnsiblePlan(ctx, scope, r.Client, plan)
-			err = r.Client.Create(ctx, &ansible)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
-		} else {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Compare plan with ansiblePlan to update ansiblePlan
-	err = syncAnsiblePlan(ctx, scope, r.Client, plan, &ansiblePlan)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
 	return ctrl.Result{}, nil
 }
 
@@ -599,77 +572,6 @@ func SetNeedKeepAlived(role string, alive []string) bool {
 		}
 	}
 	return false
-
-}
-
-// TODO sync ansiblePlan
-func syncAnsiblePlan(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, ansibleOld *ecnsv1.AnsiblePlan) error {
-	ansibleNew := utils.CreateAnsiblePlan(ctx, scope, cli, plan)
-	ansibleOld.ObjectMeta.DeepCopyInto(&ansibleNew.ObjectMeta)
-	ansibleNew.TypeMeta = ansibleOld.TypeMeta
-	// 1. check if upgrade is needed
-	upgrade, err := utils.IsUpgradeNeeded(ansibleOld, &ansibleNew)
-	if err != nil {
-		return err
-	}
-	if upgrade {
-		//update ansiblePlan
-		ansibleNew.Spec.Type = ecnsv1.ExecTypeUpgrade
-	}
-	// del with remove or expansion
-	DiffReporter := &utils.DiffReporter{}
-	option := cmpopts.SortSlices(func(i, j *ecnsv1.AnsibleNode) bool { return i.Name < j.Name })
-	ignore := cmpopts.IgnoreFields(ecnsv1.AnsibleNode{}, "MemoryReserve", "AnsibleSSHPrivateKeyFile")
-	fmt.Println(cmp.Diff(ansibleOld.Spec.Install.NodePools, ansibleNew.Spec.Install.NodePools, option, ignore, cmp.Reporter(DiffReporter)))
-	if DiffReporter.NodesUpdate || (DiffReporter.UpScale && DiffReporter.DownScale) {
-		return errors.New("Nodes base's information has changed or need scale and remove node once,please check the instance status")
-	} else if DiffReporter.UpScale {
-		// set ansiblePlan type is expansion
-		ansibleNew.Spec.Type = ecnsv1.ExecTypeExpansion
-		// reset this scale field
-		ansibleNew.Spec.Install.KubeNode = nil
-		for _, node := range DiffReporter.AdditionalNodes {
-			ansibleNew.Spec.Install.KubeNode = append(ansibleNew.Spec.Install.KubeNode, node.Name)
-		}
-		//if scale ingress up,OtherGroup need add new ingress node to update new ingress vip
-
-		var flushIngressVirtualVip bool
-		IngressLabel, scaleIngress := ansibleNew.Spec.Install.OtherAnsibleOpts["ingress_label"]
-		if scaleIngress && !plan.Spec.LBEnable {
-			// get ingress_virtual_vip
-			for _, group := range plan.Status.InfraMachine {
-				if group.Role == IngressLabel {
-					ansibleNew.Spec.Install.OtherAnsibleOpts["ingress_virtual_vip"] = group.HAPrivateIP
-				}
-			}
-			if flushIngressVirtualVip {
-				return errors.New("ingress_label is set but ingress_virtual_vip no set ,please check ingress HA status")
-			}
-		}
-
-	} else if DiffReporter.DownScale {
-		// set ansiblePlan type is remove
-		ansibleNew.Spec.Type = ecnsv1.ExecTypeRemove
-		// reset this scale field
-		ansibleNew.Spec.Install.KubeNode = nil
-		for _, node := range DiffReporter.AdditionalNodes {
-			ansibleNew.Spec.Install.KubeNode = append(ansibleNew.Spec.Install.KubeNode, node.Name)
-		}
-		// add remove force_delete_nodes,because machine instance has been deleted
-		ansibleNew.Spec.Install.OtherAnsibleOpts["delete_nodes_confirmation"] = `"yes"`
-		ansibleNew.Spec.Install.OtherAnsibleOpts["force_delete_nodes"] = "true"
-		// notice: if scale down,node pools can't be changed with plan machines list.
-		ansibleNew.Spec.Install.NodePools = ansibleOld.Spec.Install.NodePools
-	}
-
-	if upgrade || DiffReporter.UpScale || DiffReporter.DownScale {
-		err = utils.PatchAnsiblePlan(ctx, cli, ansibleOld, &ansibleNew)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 
 }
 

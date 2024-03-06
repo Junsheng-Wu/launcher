@@ -26,4 +26,21 @@ resources:
   kind: AnsiblePlan
   path: easystack.com/plan/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: easystack.com
+  group: ecns.easystack.com
+  kind: ClusterOperationSet
+  path: easystack.com/plan/api/ecns.easystack.com/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: easystack.com
+  kind: ClusterOperationSet
+  path: easystack.com/plan/api/v1
+  version: v1
 version: "3"

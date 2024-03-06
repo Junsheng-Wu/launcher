@@ -65,7 +65,7 @@ rules:
 - apiGroups:
   - easystack.com
   resources:
-  - ansibleplans
+  - clusteroperationsets
   verbs:
   - create
   - delete
@@ -77,13 +77,13 @@ rules:
 - apiGroups:
   - easystack.com
   resources:
-  - ansibleplans/finalizers
+  - clusteroperationsets/finalizers
   verbs:
   - update
 - apiGroups:
   - easystack.com
   resources:
-  - ansibleplans/status
+  - clusteroperationsets/status
   verbs:
   - get
   - patch

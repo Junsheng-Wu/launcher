@@ -1,0 +1,31 @@
+# permissions for end users to edit clusteroperationsets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: clusteroperationset-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: easystack-eks-op
+    app.kubernetes.io/part-of: easystack-eks-op
+    app.kubernetes.io/managed-by: kustomize
+  name: clusteroperationset-editor-role
+rules:
+- apiGroups:
+  - easystack.com
+  resources:
+  - clusteroperationsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - easystack.com
+  resources:
+  - clusteroperationsets/status
+  verbs:
+  - get

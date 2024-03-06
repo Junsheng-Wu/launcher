@@ -17,17 +17,20 @@ limitations under the License.
 package main
 
 import (
-	ecnsv1 "easystack.com/plan/api/v1"
-	"easystack.com/plan/internal/controller"
 	"flag"
-	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	"os"
 	goruntime "runtime"
+
+	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	cc "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
+
+	ecnsv1 "easystack.com/plan/api/v1"
+	"easystack.com/plan/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -52,6 +55,7 @@ func init() {
 	utilruntime.Must(clusteropenstack.AddToScheme(scheme))
 	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(kubeadm.AddToScheme(scheme))
+	utilruntime.Must(clusteroperationv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -107,12 +111,12 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Plan")
 		os.Exit(1)
 	}
-	if err = (&controller.AnsiblePlanReconciler{
+	if err = (&controller.ClusterOperationSetReconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
-		EventRecorder: mgr.GetEventRecorderFor("AnsiblePlan"),
-	}).SetupWithManager(mgr, concurrency(5)); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AnsiblePlan")
+		EventRecorder: mgr.GetEventRecorderFor("ClusterOperationSet"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterOperationSet")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

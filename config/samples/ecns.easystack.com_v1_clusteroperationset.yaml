@@ -1,0 +1,12 @@
+apiVersion: ecns.easystack.com.easystack.com/v1
+kind: ClusterOperationSet
+metadata:
+  labels:
+    app.kubernetes.io/name: clusteroperationset
+    app.kubernetes.io/instance: clusteroperationset-sample
+    app.kubernetes.io/part-of: easystack-eks-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: easystack-eks-op
+  name: clusteroperationset-sample
+spec:
+  # TODO(user): Add fields here

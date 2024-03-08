@@ -536,10 +536,6 @@ func createMachineset(ctx context.Context, scope *scope.Scope, client client.Cli
 	if set.Role == ecnsv1.MasterSetRole || set.Role == ecnsv1.Etcd {
 		machineSet.Spec.Template.Labels[ecnsv1.MachineControlPlaneLabelName] = "true"
 	}
-	machineSet.Spec.Template.Spec.Bootstrap.ConfigRef = &corev1.ObjectReference{}
-	machineSet.Spec.Template.Spec.Bootstrap.ConfigRef.APIVersion = Clusterapibootstrapapi
-	machineSet.Spec.Template.Spec.Bootstrap.ConfigRef.Kind = Clusterapibootstrapkind
-	machineSet.Spec.Template.Spec.Bootstrap.ConfigRef.Name = plan.Spec.ClusterName
 	cloud_secret_name := fmt.Sprintf("%s-%s-cloudinit", plan.Spec.ClusterName, set.Name)
 	machineSet.Spec.Template.Spec.Bootstrap.DataSecretName = &cloud_secret_name
 	machineSet.Spec.Template.Spec.ClusterName = plan.Spec.ClusterName

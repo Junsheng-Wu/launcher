@@ -17,8 +17,10 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/cluster-api/errors"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -231,10 +233,10 @@ type PlanStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	//ServerGroupID is the server group id of cluster
 	ServerGroupID *Servergroups `json:"server_group_id,omitempty"`
-	// VMDone show the vm is created or not
-	VMDone bool `json:"vm_done,omitempty"`
-	// OpenstackMachineList is the list of openstack machine
-	OpenstackMachineList []clusteropenstack.OpenStackMachine `json:"openstack_machine_list,omitempty"`
+	// Phase is the plan phase
+	Phase map[PlanType]PlanPhase `json:"phase"`
+	// VMFailureReason is the error which vm was created
+	VMFailureReason map[string]MachineFailureReason `json:"VMFailureReason,omitempty"`
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
 	InfraMachine map[string]InfraMachine `json:"infra_machine,omitempty"`
 	// PlanLoadBalancer is the list of load balancer of plan
@@ -242,6 +244,35 @@ type PlanStatus struct {
 	// Bastion is the bastion of plan
 	Bastion *clusteropenstack.Instance `json:"bastion,omitempty"`
 }
+
+type PlanType string
+
+const (
+	VM             PlanType = "VM"
+	GenerateConfig PlanType = "GenerationConfig"
+	Check          PlanType = "Check"
+)
+
+type PlanPhase string
+
+const (
+	Processing PlanPhase = "Processing"
+	Failed     PlanPhase = "Failed"
+	Completed  PlanPhase = "Completed"
+)
+
+type MachineFailureReason struct {
+	Type    MachineFailureType         `json:"type"`
+	Reason  *errors.MachineStatusError `json:"reason"`
+	Message *string                    `json:"message"`
+}
+
+type MachineFailureType string
+
+const (
+	InstanceError  MachineFailureType = "InstanceError"
+	ConditionError MachineFailureType = "ConditionError"
+)
 
 // LoadBalancer represents basic information about the associated OpenStack LoadBalancer.
 type LoadBalancer struct {
@@ -317,4 +348,81 @@ type PlanList struct {
 
 func init() {
 	SchemeBuilder.Register(&Plan{}, &PlanList{})
+}
+
+// SetPlanPhaseVMFailed set plan phase status
+func SetPlanPhaseVMFailed(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[VM] = Failed
+	plan.Status.Phase = phase
+	fmt.Println("change status to vm failed")
+	return plan
+}
+
+// SetPlanPhaseVMProcessing set plan phase status
+func SetPlanPhaseVMProcessing(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[VM] = Processing
+	plan.Status.Phase = phase
+	plan.Status.VMFailureReason = nil
+	fmt.Println("change status to vm Processing")
+	return plan
+}
+
+// SetPlanPhaseVMCompleted set plan phase status
+func SetPlanPhaseVMCompleted(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[VM] = Completed
+	plan.Status.Phase = phase
+	plan.Status.VMFailureReason = nil
+	fmt.Println("change status to vm Completed")
+	return plan
+}
+
+// SetPlanPhaseCheckFailed set plan phase status
+func SetPlanPhaseCheckFailed(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[Check] = Failed
+	plan.Status.Phase = phase
+	return plan
+}
+
+// SetPlanPhaseCheckProcessing set plan phase status
+func SetPlanPhaseCheckProcessing(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[Check] = Processing
+	plan.Status.Phase = phase
+	return plan
+}
+
+// SetPlanPhaseCheckCompleted set plan phase status
+func SetPlanPhaseCheckCompleted(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[Check] = Completed
+	plan.Status.Phase = phase
+	return plan
+}
+
+// SetPlanPhaseGenerationConfigFailed set plan phase status
+func SetPlanPhaseGenerationConfigFailed(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[GenerateConfig] = Failed
+	plan.Status.Phase = phase
+	return plan
+}
+
+// SetPlanPhaseGenerationConfigProcessing set plan phase status
+func SetPlanPhaseGenerationConfigProcessing(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[GenerateConfig] = Processing
+	plan.Status.Phase = phase
+	return plan
+}
+
+// SetPlanPhaseGenerationConfigCompleted set plan phase status
+func SetPlanPhaseGenerationConfigCompleted(plan *Plan) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	phase[GenerateConfig] = Completed
+	plan.Status.Phase = phase
+	return plan
 }

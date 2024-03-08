@@ -136,10 +136,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		log      = log.FromContext(ctx)
 	)
 
-	if req.Namespace != "wjs" {
-		return ctrl.Result{}, nil
-	}
-
 	// Fetch the OpenStackMachine instance.
 
 	plan := &ecnsv1.Plan{}
@@ -262,8 +258,17 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 }
 
 func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope, patchHelper *patch.Helper, plan *ecnsv1.Plan) (_ ctrl.Result, reterr error) {
-	// get gopher cloud client
-	// get or create app credential
+	var skipReconcile bool
+	for _, reason := range plan.Status.VMFailureReason {
+		if reason.Type == ecnsv1.InstanceError {
+			skipReconcile = true
+		}
+	}
+	if skipReconcile {
+		scope.Logger.Info(fmt.Sprintf("cluster %s has vm create failed", plan.Spec.ClusterName))
+		return ctrl.Result{}, nil
+	}
+
 	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanStartEvent, "Start plan")
 	scope.Logger.Info("Reconciling plan openstack resource")
 	err := syncAppCre(ctx, scope, r.Client, plan)
@@ -275,7 +280,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	//TODO  get or create cluster.cluster.x-k8s.io
 	err = syncCreateCluster(ctx, r.Client, plan)
 	if err != nil {
@@ -291,12 +295,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 	//TODO  get or create openstackcluster.infrastructure.cluster.x-k8s.io
 	err = syncCreateOpenstackCluster(ctx, r.Client, plan, masterM)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	//TODO  get or create KubeadmConfig ,no use
-	err = syncCreateKubeadmConfig(ctx, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -365,12 +363,15 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	plan.Status.ServerGroupID.MasterServerGroupID = mastergroupID
 	plan.Status.ServerGroupID.WorkerServerGroupID = nodegroupID
 
-	plan.Status.VMDone = true
+	err = utils.WaitAllMachineReady(ctx, scope, r.Client, plan)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: waitForClusterInfrastructureReadyDuration}, err
+	}
 	// Update status.InfraMachine and OpenstackMachineList
 	err = updatePlanStatus(ctx, scope, r.Client, plan)
 	if err != nil {
 		scope.Logger.Error(err, "update plan status error")
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: waitForClusterInfrastructureReadyDuration}, err
 	}
 
 	// update master role ports allowed-address-pairs
@@ -407,10 +408,18 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 		}
 	}
 
-	// TODO check all machineset replicas is ready to num,create ansible plan
-	// 1.create ansiblePLan cr
-	// 2.if ansiblePlan cr existed,which is different in plan to update ansiblePlan cr type and Done field.
+	// syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
+	err = syncConfig(ctx, scope, r.Client, plan)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: waitForClusterInfrastructureReadyDuration}, err
+	}
+
 	return ctrl.Result{}, nil
+}
+
+// syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
+func syncConfig(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
+	return nil
 }
 
 func syncMember(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, setStatus *ecnsv1.InfraMachine) error {
@@ -584,7 +593,6 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 	if err != nil {
 		return err
 	}
-	plan.Status.OpenstackMachineList = nil
 	for _, m := range machineSetList.Items {
 		labelsOpenstackMachine := map[string]string{clusterapi.MachineSetNameLabel: m.Name}
 		openstackMachineList := &clusteropenstackapis.OpenStackMachineList{}
@@ -592,7 +600,6 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 		if err != nil {
 			return err
 		}
-		plan.Status.OpenstackMachineList = append(plan.Status.OpenstackMachineList, openstackMachineList.Items...)
 		ips := make(map[string]string)
 		var Ports []string
 		_, role, _ := strings.Cut(m.Name, plan.Spec.ClusterName)
@@ -632,6 +639,14 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 		return errors.New("bastion information is nil,please check bastion vm status and port information")
 	}
 	plan.Status.Bastion = oc.Status.Bastion
+
+	// add vm complete phase
+	plan = ecnsv1.SetPlanPhaseVMCompleted(plan)
+	// update plan status
+	if errM := cli.Status().Update(ctx, plan); errM != nil {
+		scope.Logger.Error(errM, "update plan  status failed")
+		return errors.New("update plan status failed")
+	}
 	return nil
 }
 
@@ -803,9 +818,11 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 			openstackCluster.Spec.DNSNameservers = plan.Spec.DNSNameservers
 			if plan.Spec.UseFloatIP == true {
 				openstackCluster.Spec.DisableAPIServerFloatingIP = false
+				openstackCluster.Spec.DisableFloatingIP = false
 				openstackCluster.Spec.ExternalNetworkID = plan.Spec.ExternalNetworkId
 			} else {
 				openstackCluster.Spec.DisableAPIServerFloatingIP = true
+				openstackCluster.Spec.DisableFloatingIP = true
 				openstackCluster.Spec.ExternalNetworkID = ""
 			}
 			openstackCluster.Spec.ManagedSecurityGroups = true
@@ -1109,6 +1126,13 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 		case diff == 0:
 			return errors.New("the infra dont need reconcile,please check code")
 		case diff > 0:
+			// update plan status,if plan status is processing,then will skip
+			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
+				plan = ecnsv1.SetPlanPhaseVMProcessing(plan)
+				if errM := c.Status().Update(ctx, plan); errM != nil {
+					sc.Logger.Error(errM, "update plan vm status to process failed,diff > 0")
+				}
+			}
 			for i := 0; i < int(diff); i++ {
 				replicas := *acNow.Spec.Replicas + int32(i) + 1
 				sc.Logger.Info("add pass into", "replicas", replicas)
@@ -1118,6 +1142,13 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 				}
 			}
 		case diff < 0:
+			// update plan status,if plan status is processing,then will skip
+			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
+				plan = ecnsv1.SetPlanPhaseVMProcessing(plan)
+				if errM := c.Status().Update(ctx, plan); errM != nil {
+					sc.Logger.Error(errM, "update plan vm status to process failed,diff < 0")
+				}
+			}
 			diff *= -1
 			if adoptIn.MachineHasDeleted != diff {
 				return fmt.Errorf("please make sure the machine has annotation %s", utils.DeleteMachineAnnotation)
@@ -1131,7 +1162,6 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 				}
 			}
 		}
-
 	}
 	return nil
 }
@@ -1199,11 +1229,6 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
-	err = deleteKubeadmConfig(ctx, scope, r.Client, plan)
-	if err != nil {
-		return err
-	}
-
 	err = deleteSSHKeySecert(ctx, scope, r.Client, plan)
 	if err != nil {
 		return err
@@ -1215,11 +1240,6 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	}
 
 	err = deleteSeverGroup(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteAnsiblePlan(ctx, r.Client, scope, plan)
 	if err != nil {
 		return err
 	}

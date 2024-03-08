@@ -18,8 +18,8 @@ package controller
 
 import (
 	"context"
-
 	"github.com/heimdalr/dag"
+
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/utils"
 	"github.com/go-logr/logr"
@@ -58,13 +58,8 @@ type ClusterOperationSetReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	var (
-
-
 		log = log.FromContext(ctx)
 	)
-	if req.Namespace != "wjs" {
-		return ctrl.Result{}, nil
-	}
 	// Fetch the OpenStackMachine instance.
 	operationSet := &ecnsv1.ClusterOperationSet{}
 	err := r.Client.Get(ctx, req.NamespacedName, operationSet)
@@ -146,13 +141,13 @@ func (r *ClusterOperationSetReconciler) reconcileNormal(ctx context.Context, log
 			if apierrors.IsNotFound(err) {
 				status = ecnsv1.ClusterOperationStatus{
 					OperationName: "",
-					Status: "",
-					Action: "",
+					Status:        "",
+					Action:        "",
 				}
 			} else {
 				return ctrl.Result{}, err
 			}
-			
+
 		} else {
 			status = ecnsv1.ClusterOperationStatus{
 				OperationName: clusterOperation.Name,
@@ -241,7 +236,6 @@ func (r *ClusterOperationSetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		For(&ecnsv1.ClusterOperationSet{}).
 		Complete(r)
 }
-
 
 func CreateClusterOperationSet(clusterOps *ecnsv1.ClusterOps) clusteroperationv1alpha1.ClusterOperation {
 	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}

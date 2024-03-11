@@ -22,12 +22,12 @@ import (
 	goruntime "runtime"
 
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
+	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	cc "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
 
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/internal/controller"

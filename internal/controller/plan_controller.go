@@ -135,11 +135,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		deletion = false
 		log      = log.FromContext(ctx)
 	)
-
-	if req.Namespace != "wjs" {
-		return ctrl.Result{}, nil
-	}
-
 	// Fetch the OpenStackMachine instance.
 
 	plan := &ecnsv1.Plan{}

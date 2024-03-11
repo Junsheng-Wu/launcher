@@ -290,9 +290,17 @@ func (in *ClusterOperationSetSpec) DeepCopyInto(out *ClusterOperationSetSpec) {
 	}
 	if in.SideMap != nil {
 		in, out := &in.SideMap, &out.SideMap
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string][]string, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			var outVal []string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
+				*out = make([]string, len(*in))
+				copy(*out, *in)
+			}
+			(*out)[key] = outVal
 		}
 	}
 }
@@ -347,6 +355,13 @@ func (in *ClusterOps) DeepCopyInto(out *ClusterOps) {
 	*out = *in
 	if in.PreHook != nil {
 		in, out := &in.PreHook, &out.PreHook
+		*out = make([]v1alpha1.HookAction, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.PostHook != nil {
+		in, out := &in.PostHook, &out.PostHook
 		*out = make([]v1alpha1.HookAction, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])

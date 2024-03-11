@@ -36,6 +36,8 @@ spec:
           spec:
             description: ClusterOperationSetSpec defines the desired state of ClusterOperationSet
             properties:
+              cluster:
+                type: string
               clusterOperations:
                 description: Foo is an example field of ClusterOperationSet. Edit
                   clusteroperationset_types.go to remove/update
@@ -47,14 +49,37 @@ spec:
                       type: string
                     actionType:
                       type: string
-                    cluster:
-                      type: string
-                    image:
-                      type: string
                     name:
                       type: string
                     namespace:
                       type: string
+                    postHook:
+                      items:
+                        properties:
+                          action:
+                            type: string
+                          actionSource:
+                            default: builtin
+                            type: string
+                          actionSourceRef:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            type: object
+                          actionType:
+                            type: string
+                          extraArgs:
+                            type: string
+                        required:
+                        - action
+                        - actionType
+                        type: object
+                      type: array
                     preHook:
                       items:
                         properties:
@@ -86,9 +111,13 @@ spec:
                       type: string
                   type: object
                 type: array
+              image:
+                type: string
               sideMap:
                 additionalProperties:
-                  type: string
+                  items:
+                    type: string
+                  type: array
                 type: object
               timeout:
                 type: integer

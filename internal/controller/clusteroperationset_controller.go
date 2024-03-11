@@ -18,11 +18,13 @@ package controller
 
 import (
 	"context"
+	"time"
+	"sync"
 
-	"github.com/heimdalr/dag"
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/utils"
 	"github.com/go-logr/logr"
+	"github.com/heimdalr/dag"
 	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -58,13 +60,9 @@ type ClusterOperationSetReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.15.0/pkg/reconcile
 func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	var (
-
-
 		log = log.FromContext(ctx)
 	)
-	if req.Namespace != "wjs" {
-		return ctrl.Result{}, nil
-	}
+
 	// Fetch the OpenStackMachine instance.
 	operationSet := &ecnsv1.ClusterOperationSet{}
 	err := r.Client.Get(ctx, req.NamespacedName, operationSet)
@@ -146,13 +144,12 @@ func (r *ClusterOperationSetReconciler) reconcileNormal(ctx context.Context, log
 			if apierrors.IsNotFound(err) {
 				status = ecnsv1.ClusterOperationStatus{
 					OperationName: "",
-					Status: "",
-					Action: "",
+					Status:        "",
+					Action:        "",
 				}
 			} else {
 				return ctrl.Result{}, err
 			}
-			
 		} else {
 			status = ecnsv1.ClusterOperationStatus{
 				OperationName: clusterOperation.Name,
@@ -216,19 +213,75 @@ func (r *ClusterOperationSetReconciler) SyncClusterOperations(ctx context.Contex
 	// execute root
 	executableSides := visitor.GetExecutableSides()
 	if len(executableSides) > 0 {
-		for _, es := range executableSides {
+		err := r.waitForOperationStatus(ctx, executableSides, cos)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+
+func (r *ClusterOperationSetReconciler) waitForOperationStatus(ctx context.Context, operationSides []utils.OperationSide, cos *ecnsv1.ClusterOperationSet) error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(operationSides))
+
+	wg.Add(len(operationSides))
+
+	for _, es := range operationSides {
+		go func(es utils.OperationSide) {
+			defer wg.Done()
+
 			oldCps := &clusteroperationv1alpha1.ClusterOperation{}
 			err := r.Client.Get(ctx, types.NamespacedName{Namespace: es.ClusterOps.Namespace, Name: es.ClusterOps.Name}, oldCps)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					es.ClusterOps.Status = utils.RunningStatus
-					ops := CreateClusterOperationSet(es.ClusterOps)
+					ops := InitClusterOperation(es.ClusterOps, cos)
 					err = r.Client.Create(ctx, &ops)
 					if err != nil {
-						return err
+						errCh <- err
+						return
 					}
+				} else {
+					errCh <- err
+					return
 				}
 			}
+
+			for {
+				select {
+				case <-time.After(time.Minute * 60):
+					errCh <- errors.New("timed out waiting for CR status change")
+					return
+				case <-ctx.Done():
+					errCh <- ctx.Err()
+					return
+				default:
+					newCps := &clusteroperationv1alpha1.ClusterOperation{}
+					err := r.Client.Get(ctx, types.NamespacedName{Namespace: es.ClusterOps.Namespace, Name: es.ClusterOps.Name}, newCps)
+					if err != nil {
+						errCh <- err
+						return
+					}
+
+					if newCps.Status.Status == utils.FailedStatus || newCps.Status.Status == utils.SucceededStatus {
+						// CR status changed to Failed or Complete, proceed to next step
+						goto Next
+					}
+					time.Sleep(time.Second * 60)
+				}
+			}
+		Next:
+		}(es)
+	}
+	wg.Wait()
+
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			return err
 		}
 	}
 
@@ -242,14 +295,13 @@ func (r *ClusterOperationSetReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-
-func CreateClusterOperationSet(clusterOps *ecnsv1.ClusterOps) clusteroperationv1alpha1.ClusterOperation {
-	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}
+func InitClusterOperation(clusterOps *ecnsv1.ClusterOps, cos *ecnsv1.ClusterOperationSet) clusteroperationv1alpha1.ClusterOperation {
+	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}	
 	clusterOperation.Name = clusterOps.Name
 	clusterOperation.Status.Status = clusterOps.Status
 	clusterOperation.Namespace = clusterOps.Namespace
-	clusterOperation.Spec.Cluster = clusterOps.Cluster
-	clusterOperation.Spec.Image = clusterOps.Image
+	clusterOperation.Spec.Cluster = cos.Spec.Cluster
+	clusterOperation.Spec.Image = cos.Spec.Image
 	clusterOperation.Spec.Action = clusterOps.Action
 	clusterOperation.Spec.ActionSource = (*clusteroperationv1alpha1.ActionSource)(&clusterOps.ActionSource)
 	clusterOperation.Spec.ActionType = clusteroperationv1alpha1.ActionType(clusterOps.ActionType)

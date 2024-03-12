@@ -350,79 +350,25 @@ func init() {
 	SchemeBuilder.Register(&Plan{}, &PlanList{})
 }
 
-// SetPlanPhaseVMFailed set plan phase status
-func SetPlanPhaseVMFailed(plan *Plan) *Plan {
+// SetPlanPhase set plan phase status
+func SetPlanPhase(plan *Plan, planType PlanType, planPhase PlanPhase) *Plan {
 	var phase = make(map[PlanType]PlanPhase)
-	phase[VM] = Failed
-	plan.Status.Phase = phase
-	fmt.Println("change status to vm failed")
-	return plan
-}
-
-// SetPlanPhaseVMProcessing set plan phase status
-func SetPlanPhaseVMProcessing(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[VM] = Processing
-	plan.Status.Phase = phase
-	plan.Status.VMFailureReason = nil
-	fmt.Println("change status to vm Processing")
-	return plan
-}
-
-// SetPlanPhaseVMCompleted set plan phase status
-func SetPlanPhaseVMCompleted(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[VM] = Completed
-	plan.Status.Phase = phase
-	plan.Status.VMFailureReason = nil
-	fmt.Println("change status to vm Completed")
-	return plan
-}
-
-// SetPlanPhaseCheckFailed set plan phase status
-func SetPlanPhaseCheckFailed(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[Check] = Failed
-	plan.Status.Phase = phase
-	return plan
-}
-
-// SetPlanPhaseCheckProcessing set plan phase status
-func SetPlanPhaseCheckProcessing(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[Check] = Processing
-	plan.Status.Phase = phase
-	return plan
-}
-
-// SetPlanPhaseCheckCompleted set plan phase status
-func SetPlanPhaseCheckCompleted(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[Check] = Completed
-	plan.Status.Phase = phase
-	return plan
-}
-
-// SetPlanPhaseGenerationConfigFailed set plan phase status
-func SetPlanPhaseGenerationConfigFailed(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[GenerateConfig] = Failed
-	plan.Status.Phase = phase
-	return plan
-}
-
-// SetPlanPhaseGenerationConfigProcessing set plan phase status
-func SetPlanPhaseGenerationConfigProcessing(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[GenerateConfig] = Processing
-	plan.Status.Phase = phase
-	return plan
-}
-
-// SetPlanPhaseGenerationConfigCompleted set plan phase status
-func SetPlanPhaseGenerationConfigCompleted(plan *Plan) *Plan {
-	var phase = make(map[PlanType]PlanPhase)
-	phase[GenerateConfig] = Completed
-	plan.Status.Phase = phase
+	if len(plan.Status.Phase) == 0 {
+		plan.Status.Phase = phase
+	}
+	switch planType {
+	case VM:
+		plan.Status.Phase[VM] = planPhase
+		fmt.Printf("change status to vm %s\n", planPhase)
+		if planPhase != Failed {
+			plan.Status.VMFailureReason = nil
+		}
+	case GenerateConfig:
+		plan.Status.Phase[GenerateConfig] = planPhase
+		fmt.Printf("change status to generate config %s\n", planPhase)
+	case Check:
+		plan.Status.Phase[Check] = planPhase
+		fmt.Printf("change status to check %s\n", planPhase)
+	}
 	return plan
 }

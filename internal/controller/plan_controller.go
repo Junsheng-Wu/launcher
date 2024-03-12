@@ -641,7 +641,7 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 	plan.Status.Bastion = oc.Status.Bastion
 
 	// add vm complete phase
-	plan = ecnsv1.SetPlanPhaseVMCompleted(plan)
+	plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Completed)
 	// update plan status
 	if errM := cli.Status().Update(ctx, plan); errM != nil {
 		scope.Logger.Error(errM, "update plan  status failed")
@@ -1128,7 +1128,7 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 		case diff > 0:
 			// update plan status,if plan status is processing,then will skip
 			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
-				plan = ecnsv1.SetPlanPhaseVMProcessing(plan)
+				plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Processing)
 				if errM := c.Status().Update(ctx, plan); errM != nil {
 					sc.Logger.Error(errM, "update plan vm status to process failed,diff > 0")
 				}
@@ -1144,7 +1144,7 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 		case diff < 0:
 			// update plan status,if plan status is processing,then will skip
 			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
-				plan = ecnsv1.SetPlanPhaseVMProcessing(plan)
+				plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Processing)
 				if errM := c.Status().Update(ctx, plan); errM != nil {
 					sc.Logger.Error(errM, "update plan vm status to process failed,diff < 0")
 				}

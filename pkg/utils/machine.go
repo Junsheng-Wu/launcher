@@ -133,7 +133,7 @@ func WaitAllMachineReady(ctx context.Context, scope *scope.Scope, cli client.Cli
 	})
 
 	if len(errorMessage) > 0 {
-		plan = ecnsv1.SetPlanPhaseVMFailed(plan)
+		plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Failed)
 		plan.Status.VMFailureReason = errorMessage
 		//try to update plan status
 		if errM := cli.SubResource("status").Update(ctx, plan); errM != nil {

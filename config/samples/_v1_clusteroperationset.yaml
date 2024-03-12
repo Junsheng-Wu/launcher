@@ -10,38 +10,36 @@ metadata:
   name: clusteroperationset-test
   namespace: wjs
 spec:
+  cluster: cluster-mini
+  image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
   clusterOperations:
   - action: cluster.yml
     name: ops-1
     namespace: wjs
     actionSource: builtin
     actionType: playbook
-    cluster: cluster-mini
-    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
     preHook:
     - actionType: shell
       action: "echo hello"
   - action: cluster.yml
-    name: ops-1
+    name: ops-2
     namespace: wjs
     actionSource: builtin
     actionType: playbook
-    cluster: cluster-mini
-    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
     preHook:
     - actionType: shell
       action: "echo hello"
   - action: cluster.yml
-    name: ops-1
+    name: ops-3
     namespace: wjs
     actionSource: builtin
     actionType: playbook
-    cluster: cluster-mini
-    image: hub.easystack.io/production/escloud-linux-source-kubean-captain:6.1.1
     preHook:
     - actionType: shell
       action: "echo hello"
   sideMap:
-    ops-1: ops-2
-    ops-2: ops-3
+    ops-1:
+      - ops-2
+    ops-2: 
+      - ops-3
   timeout: 3600

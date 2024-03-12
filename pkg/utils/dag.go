@@ -17,10 +17,11 @@ type OperationSide struct {
 }
 
 const (
-	RunningStatus   clusteroperationv1alpha1.OpsStatus = "Running"
-	SucceededStatus clusteroperationv1alpha1.OpsStatus = "Succeeded"
-	FailedStatus    clusteroperationv1alpha1.OpsStatus = "Failed"
-	Executable      clusteroperationv1alpha1.OpsStatus = "Executable"
+	RunningStatus    clusteroperationv1alpha1.OpsStatus = "Running"
+	SucceededStatus  clusteroperationv1alpha1.OpsStatus = "Succeeded"
+	FailedStatus     clusteroperationv1alpha1.OpsStatus = "Failed"
+	ExecutableStatus clusteroperationv1alpha1.OpsStatus = "Executable"
+	PendingStatus    clusteroperationv1alpha1.OpsStatus = "Pending"
 )
 
 func NewOperationSide(co ecnsv1.ClusterOps) *OperationSide {
@@ -40,16 +41,18 @@ type OperationVisitor struct {
 	// Value is the value of the operation of name.
 	MapOps map[string]*OperationSide
 
-	Sides map[string]string
+	Sides map[string][]string
 }
 
-func NewOperationVisitor(d *dag.DAG, operationSides map[string]*OperationSide, sideMap map[string]string) *OperationVisitor {
+func NewOperationVisitor(d *dag.DAG, operationSides map[string]*OperationSide, sideMap map[string][]string) *OperationVisitor {
 	for _, side := range operationSides {
 		d.AddVertex(*side)
 	}
 
-	for i, j := range sideMap {
-		d.AddEdge(i, j)
+	for key, values := range sideMap {
+		for _, v := range values {
+			d.AddEdge(key, v)
+		}
 	}
 
 	return &OperationVisitor{
@@ -62,10 +65,10 @@ func NewOperationVisitor(d *dag.DAG, operationSides map[string]*OperationSide, s
 func (o *OperationVisitor) Visit(v dag.Vertexer) {
 	id, value := v.Vertex()
 	if ok, _ := o.Dag.IsRoot(id); ok {
-		if value.(OperationSide).Status == SucceededStatus || value.(OperationSide).Status == FailedStatus || value.(OperationSide).Status == RunningStatus {
+		if value.(OperationSide).Status == SucceededStatus || value.(OperationSide).Status == FailedStatus || value.(OperationSide).Status == RunningStatus || value.(OperationSide).Status == PendingStatus {
 			return
 		} else {
-			o.MapOps[id].Status = Executable
+			o.MapOps[id].Status = ExecutableStatus
 		}
 	} else {
 		parents, err := o.Dag.GetParents(id)
@@ -77,14 +80,14 @@ func (o *OperationVisitor) Visit(v dag.Vertexer) {
 				return
 			}
 		}
-		o.MapOps[id].Status = Executable
+		o.MapOps[id].Status = ExecutableStatus
 	}
 }
 
 func (o *OperationVisitor) GetExecutableSides() []OperationSide {
 	var opsSides = []OperationSide{}
 	for _, side := range o.MapOps {
-		if side.Status == Executable {
+		if side.Status == ExecutableStatus {
 			opsSides = append(opsSides, *side)
 		}
 	}

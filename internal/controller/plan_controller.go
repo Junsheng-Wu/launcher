@@ -135,7 +135,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		deletion = false
 		log      = log.FromContext(ctx)
 	)
-
 	// Fetch the OpenStackMachine instance.
 
 	plan := &ecnsv1.Plan{}

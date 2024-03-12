@@ -32,21 +32,31 @@ type ClusterOperationSetSpec struct {
 	// Foo is an example field of ClusterOperationSet. Edit clusteroperationset_types.go to remove/update
 	ClusterOperations []ClusterOps `json:"clusterOperations,omitempty"`
 
-	SideMap map[string]string `json:"sideMap,omitempty"`
+	SideMap map[string][]string `json:"sideMap,omitempty"`
 
 	Timeout int `json:"timeout,omitempty"`
+
+	Image string `json:"image,omitempty"`
+
+	Cluster string `json:"cluster,omitempty"`
 }
 
 type ClusterOps struct {
-	Name         string                                `json:"name,omitempty"`
-	Namespace    string                                `json:"namespace,omitempty"`
-	Action       string                                `json:"action,omitempty"`
-	ActionSource string                                `json:"actionSource,omitempty"`
-	ActionType   string                                `json:"actionType,omitempty"`
-	Cluster      string                                `json:"cluster,omitempty"`
-	Image        string                                `json:"image,omitempty"`
-	Status       clusteroperationv1alpha1.OpsStatus    `json:"status,omitempty"`
-	PreHook      []clusteroperationv1alpha1.HookAction `json:"preHook,omitempty"`
+	Name string `json:"name,omitempty"`
+
+	Namespace string `json:"namespace,omitempty"`
+
+	Action string `json:"action,omitempty"`
+
+	ActionSource string `json:"actionSource,omitempty"`
+
+	ActionType string `json:"actionType,omitempty"`
+
+	Status clusteroperationv1alpha1.OpsStatus `json:"status,omitempty"`
+
+	PreHook []clusteroperationv1alpha1.HookAction `json:"preHook,omitempty"`
+
+	PostHook []clusteroperationv1alpha1.HookAction `json:"postHook,omitempty"`
 }
 
 // ClusterOperationSetStatus defines the observed state of ClusterOperationSet
@@ -54,7 +64,8 @@ type ClusterOperationSetStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	ClusterOperationStatusList []ClusterOperationStatus `json:"clusterOperationStatusList,omitempty"`
-	Status                     string                   `json:"status,omitempty"`
+
+	Status string `json:"status,omitempty"`
 }
 
 type ClusterOperationStatus struct {

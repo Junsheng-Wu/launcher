@@ -1091,7 +1091,7 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 		sc.Logger.Info("waitGroup done")
 		wait.Done()
 	}()
-	// get machineset status now
+	// get machineSet status now
 	var acNow clusterapi.MachineSet
 	var index int32
 
@@ -1123,10 +1123,10 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 
 		switch {
 		case diff == 0:
-			return errors.New("the infra dont need reconcile,please check code")
+			return errors.New("the infra don't need reconcile,please check code")
 		case diff > 0:
 			// update plan status,if plan status is processing,then will skip
-			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
+			if plan.Status.Phase == nil || plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing {
 				plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Processing)
 				if errM := c.Status().Update(ctx, plan); errM != nil {
 					sc.Logger.Error(errM, "update plan vm status to process failed,diff > 0")
@@ -1142,7 +1142,7 @@ func (r *PlanReconciler) processWork(ctx context.Context, sc *scope.Scope, c cli
 			}
 		case diff < 0:
 			// update plan status,if plan status is processing,then will skip
-			if (plan.Status.Phase != nil && plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing) || plan.Status.Phase == nil {
+			if plan.Status.Phase == nil || plan.Status.Phase[ecnsv1.VM] != ecnsv1.Processing {
 				plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Processing)
 				if errM := c.Status().Update(ctx, plan); errM != nil {
 					sc.Logger.Error(errM, "update plan vm status to process failed,diff < 0")

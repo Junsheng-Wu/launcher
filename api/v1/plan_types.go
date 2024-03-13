@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	"fmt"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/cluster-api/errors"
@@ -359,16 +358,13 @@ func SetPlanPhase(plan *Plan, planType PlanType, planPhase PlanPhase) *Plan {
 	switch planType {
 	case VM:
 		plan.Status.Phase[VM] = planPhase
-		fmt.Printf("change status to vm %s\n", planPhase)
 		if planPhase != Failed {
 			plan.Status.VMFailureReason = nil
 		}
 	case GenerateConfig:
 		plan.Status.Phase[GenerateConfig] = planPhase
-		fmt.Printf("change status to generate config %s\n", planPhase)
 	case Check:
 		plan.Status.Phase[Check] = planPhase
-		fmt.Printf("change status to check %s\n", planPhase)
 	}
 	return plan
 }

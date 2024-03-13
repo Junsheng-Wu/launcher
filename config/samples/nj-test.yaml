@@ -1,0 +1,105 @@
+apiVersion: ecns.easystack.com/v1
+kind: Plan
+metadata:
+  labels:
+    app.kubernetes.io/name: plan
+    app.kubernetes.io/instance: plan-debug
+    app.kubernetes.io/part-of: easystack-eks-op
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: easystack-eks-op
+  name: plan-mj-test
+  namespace: sloth
+spec:
+  mode: "new"
+  k8sVersion: "v1.26.4-es"
+  support_python3: false
+  lb_enable: false
+  cluster_name: "test3"
+  ssh_key: "zhouya"
+  use_float_ip: false
+  node_cidr: "10.6.0.0/24"
+  other_ansible_opts:
+    "cloud_master_vip": "172.46.0.2"
+    "registry_ip": "172.46.0.73"
+    "webhook_enabled": "false"
+    "flannel_interface": "ens3"
+    "keepalived_interface": "ens3"
+  need_keep_alive:
+    - "master"
+    - "ingress"
+    - "ingress1"
+  need_load_balancer: []
+  machine_sets:
+    - name: "test-master"
+      role: "master"
+      number: 2
+      infras:
+        - uid: "7d2d"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+            - volume_type: "hdd"
+              volume_size: 10
+              index: 2
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+          image: "eks-kylin-x86_64"
+          flavor: "8C-8G"
+          replica: 2
+        - uid: "7d3d"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 2
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+          image: "eks-kylin-x86_64"
+          flavor: "8C-8G"
+          replica: 0
+    - name: "test-node"
+      number: 0
+      role: "node"
+      infras:
+        - uid: "bb85"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+            - volume_type: "hdd"
+              volume_size: 10
+              index: 2
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+          image: "eks-kylin-x86_64"
+          flavor: "8C-8G"
+          replica: 0
+  monitor:
+    pvc_type: "cinder"
+    pvc_cap: "10"
+    auto_clear_days: "7d"
+  cni_type: "flannel"
+  pod_cidr: "10.232.0.0/14"
+  svc_cidr: "10.222.0.0/16"
+  maxRetryTime: 5
+  ansible_plan_auto: true
+  deleteVolumeOnTermination: true
+  user:
+    auth_url: "http://keystone.openstack.svc.cluster.local/v3"
+    token: "gAAAAABl6qn_NtTmpvDBJro_ZpdQL5UK9TFXnSU8oQ96tnCiMoD7zoauZZzeg_YUQgFEZ56PsLrGsWJCEaxn-gAUNQH7tXGs411GPlQqxMNLuGljtuvANtefJWwKk3vAPKPtW-LBDip7wWnYKWr38HqA5VOsJjEt282CUt5PTC0akpLOXPj_Wzs"
+    region: "RegionOne"
+
+
+
+
+
+  # TODO(user): Add fields here

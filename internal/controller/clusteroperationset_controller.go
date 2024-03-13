@@ -18,8 +18,8 @@ package controller
 
 import (
 	"context"
-	"time"
 	"sync"
+	"time"
 
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/utils"
@@ -62,7 +62,6 @@ func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.
 	var (
 		log = log.FromContext(ctx)
 	)
-
 	// Fetch the OpenStackMachine instance.
 	operationSet := &ecnsv1.ClusterOperationSet{}
 	err := r.Client.Get(ctx, req.NamespacedName, operationSet)
@@ -221,7 +220,6 @@ func (r *ClusterOperationSetReconciler) SyncClusterOperations(ctx context.Contex
 	return nil
 }
 
-
 func (r *ClusterOperationSetReconciler) waitForOperationStatus(ctx context.Context, operationSides []utils.OperationSide, cos *ecnsv1.ClusterOperationSet) error {
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(operationSides))
@@ -296,7 +294,7 @@ func (r *ClusterOperationSetReconciler) SetupWithManager(mgr ctrl.Manager) error
 }
 
 func InitClusterOperation(clusterOps *ecnsv1.ClusterOps, cos *ecnsv1.ClusterOperationSet) clusteroperationv1alpha1.ClusterOperation {
-	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}	
+	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}
 	clusterOperation.Name = clusterOps.Name
 	clusterOperation.Status.Status = clusterOps.Status
 	clusterOperation.Namespace = clusterOps.Namespace

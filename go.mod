@@ -3,7 +3,7 @@ module easystack.com/plan
 go 1.19
 
 require (
-	github.com/easystack/cluster-api-provider-openstack v0.6.8
+	github.com/easystack/cluster-api-provider-openstack v0.6.9
 	github.com/go-logr/logr v1.2.3
 	github.com/golang/mock v1.6.0
 	github.com/gophercloud/gophercloud v1.1.0
@@ -24,7 +24,6 @@ require (
 )
 
 require (
-	github.com/google/go-cmp v0.5.9
 	github.com/heimdalr/dag v1.4.0
 	github.com/kubean-io/kubean-api v0.13.1
 )
@@ -50,6 +49,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/uuid v1.3.0 // indirect

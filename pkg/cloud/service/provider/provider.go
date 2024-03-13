@@ -278,6 +278,9 @@ func getProjectIDFromAuthResult(authResult gophercloud.AuthResult) (string, erro
 		if err != nil {
 			return "", fmt.Errorf("unable to extract project from CreateResult: %v", err)
 		}
+		if project == nil {
+			return "", nil
+		}
 		return project.ID, nil
 	default:
 		return "", fmt.Errorf("unable to get the project id from auth response with type %T", authResult)

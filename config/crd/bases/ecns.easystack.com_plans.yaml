@@ -120,6 +120,10 @@ spec:
                               root volume and data volume
                             items:
                               properties:
+                                availability_zone:
+                                  description: AvailabilityZone are a set of failure
+                                    domains for volume decide the every volume's AZ
+                                  type: string
                                 index:
                                   description: Index is the index of volume 0==root
                                     volume
@@ -131,6 +135,7 @@ spec:
                                   description: VolumeType is the volume type of machine
                                   type: string
                               required:
+                              - availability_zone
                               - index
                               - volume_size
                               - volume_type

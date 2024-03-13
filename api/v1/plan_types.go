@@ -190,6 +190,7 @@ type MachineSetReconcile struct {
 	// such as init disk...
 	CloudInit string `json:"init,omitempty"`
 }
+
 type Infras struct {
 	// UID is the uid of infra
 	UID string `json:"uid"`
@@ -209,14 +210,19 @@ type Infras struct {
 	// replica is the replica of machine
 	Replica int32 `json:"replica"`
 }
+
 type volume struct {
 	// VolumeType is the volume type of machine
 	VolumeType string `json:"volume_type"`
 	// VolumeSize is the volume size of machine
 	VolumeSize int `json:"volume_size"`
+	// AvailabilityZone are a set of failure domains for volume
+	// decide the every volume's AZ
+	AvailabilityZone string `json:"availability_zone"`
 	// Index is the index of volume 0==root volume
 	Index int `json:"index"`
 }
+
 type Subnet struct {
 	// SubnetNetwork is the network of subnet
 	SubnetNetwork string `json:"subnet_network"`

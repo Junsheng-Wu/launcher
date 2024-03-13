@@ -2,8 +2,9 @@ package utils
 
 import (
 	"context"
-	ecnsv1 "easystack.com/plan/api/v1"
 	"fmt"
+
+	ecnsv1 "easystack.com/plan/api/v1"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"

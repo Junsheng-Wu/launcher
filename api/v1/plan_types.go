@@ -135,9 +135,6 @@ type PlanSpec struct {
 	//Paused is the flag to pause the plan
 	Paused bool `json:"paused,omitempty"`
 
-	// AnsiblePlanAuto  decide to auto to run ansible plan
-	AnsiblePlanAuto bool `json:"ansible_plan_auto,omitempty"`
-
 	// UserInfo is the user of keystone auth
 	UserInfo User `json:"user,omitempty"`
 
@@ -146,6 +143,36 @@ type PlanSpec struct {
 
 	// DeleteVolumeOnTermination is the flag to decide to delete volume on termination
 	DeleteVolumeOnTermination bool `json:"deleteVolumeOnTermination,omitempty"`
+
+	// NodesInfo are the node pools
+	HostConf *HostConf `json:"hostConf,omitempty"`
+
+	// HostConfName is the name of hostConf configMap
+	HostConfName string `json:"hostConfName,omitempty"`
+
+	// VarsConfName is the name of varsConf configMap
+	VarsConfName string `json:"varsConfName,omitempty"`
+}
+
+type HostConf struct {
+	// NodePools are the node pools,we need print the config
+	// like this:
+	//# cat /etc/ansible/hosts
+	NodePools []*AnsibleNode `json:"nodePools,omitempty"`
+	//Bastion
+	Bastion *AnsibleNode `json:"bastion"`
+	// Etcd is the etcd group
+	Etcd []string `json:"etcd,omitempty"`
+	// KubeMaster is the kube master group
+	KubeMaster []string `json:"kubeMaster,omitempty"`
+	// KubeNode is the kube node group
+	KubeNode []string `json:"kubeNode,omitempty"`
+	// KubeIngress is the kube ingress group
+	KubeIngress []string `json:"kubeIngress,omitempty"`
+	// KubePrometheus is the kube prometheus group
+	KubePrometheus []string `json:"kubePrometheus,omitempty"`
+	// KubeLog is the kube log group
+	KubeLog []string `json:"kubeLog,omitempty"`
 }
 
 // User is the user of keystone auth

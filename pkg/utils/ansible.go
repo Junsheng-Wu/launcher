@@ -12,7 +12,11 @@ import (
 	"text/template"
 
 	ecnsv1 "easystack.com/plan/api/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	kubeanapis "github.com/kubean-io/kubean-api/apis"
+	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 )
 
 const AnsibleInventory = `## Configure 'ip' variable to bind kubernetes services on a
@@ -59,7 +63,7 @@ kube-node
 
 const AnsibleVars = `
 node_resources:
-  {{range .Install.NodePools}}
+  {{range .HostConf.NodePools}}
   {{.Name}}: {memory: {{.MemoryReserve}}}
   {{end}}
 kube_version: {{.Version}}
@@ -68,19 +72,94 @@ kube_version: {{.Version}}
 {{end}}
 `
 
-func GetOrCreateInventoryFile(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
+func CreateHostConfConfigMap(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) (*corev1.ConfigMap, error) {
+	t, err := template.New("inventory").Parse(AnsibleInventory)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	// Execute the template and write the output to the file
+	err = t.Execute(&buf, plan.Spec.HostConf)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: plan.Namespace,
+			Name:      plan.Spec.HostConfName,
+		},
+		Data: map[string]string{
+			"hosts.yml": buf.String(),
+		},
+	}
+	
+	return config, nil
+}
+
+func CreateVarsConfConfigMap(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) (*corev1.ConfigMap, error) {
+	t, err := template.New("vars").Parse(AnsibleVars)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	// Execute the template and write the output to the file
+	err = t.Execute(&buf, plan.Spec)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: plan.Namespace,
+			Name:      plan.Spec.VarsConfName,
+		},
+		Data: map[string]string{
+			"group_vars.yml": buf.String(),
+		},
+	}
+	// get ansible cr uuid, create inventory file by uid
+
+	return config, nil
+}
+
+func CreateOpsCluster(plan *ecnsv1.Plan) *clusterv1alpha1.Cluster {
+	cluster := &clusterv1alpha1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: plan.Namespace,
+			Name:      plan.Spec.ClusterName,
+		},
+		Spec: clusterv1alpha1.Spec{
+			HostsConfRef: &kubeanapis.DataRef{
+				NameSpace: plan.Namespace,
+				Name:      plan.Spec.HostConfName,
+			},
+			VarsConfRef: &kubeanapis.DataRef{
+				NameSpace: plan.Namespace,
+				Name:      plan.Spec.VarsConfName,
+			},
+			SSHAuthRef: &kubeanapis.DataRef{
+				NameSpace: plan.Namespace,
+				Name:      plan.Spec.SshKey,
+			},
+		},
+	}
+	return cluster
+}
+
+func GetOrCreateInventoryFile(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
 	t, err := template.New("inventory").Parse(AnsibleInventory)
 	if err != nil {
 		return err
 	}
 	var buf bytes.Buffer
 	// Execute the template and write the output to the file
-	err = t.Execute(&buf, ansible.Spec.Install)
+	err = t.Execute(&buf, plan.Spec.HostConf)
 	if err != nil {
 		return err
 	}
 	// get ansible cr uuid,create inventory file by uid
-	File := fmt.Sprintf("/opt/captain/inventory/%s", ansible.UID)
+	File := fmt.Sprintf("/opt/captain/inventory/%s", plan.UID)
 	if FileExist(File) {
 		//delete this path file
 		err = os.RemoveAll(File)

@@ -46,6 +46,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -63,6 +64,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 )
 
 const (
@@ -199,6 +201,28 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		UserID:             userID,
 		Logger:             log,
 	}
+
+	err = r.syncHostConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
+
+	err = r.syncVarsConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
+
+	err = r.syncOpsCluster(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
+
 
 	if plan.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -417,6 +441,99 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PlanReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, plan *ecnsv1.Plan) {
+	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(plan, ecnsv1.GroupVersion.WithKind("Plan"))}
+}
+
+func (r *PlanReconciler) cleanClusterOperationSet(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	clusterOperationsetList := &ecnsv1.ClusterOperationSetList{}
+	listOpt := client.ListOptions{LabelSelector: labels.SelectorFromSet(labels.Set{ClusterLabel: plan.Spec.ClusterName})}
+	err := r.Client.List(ctx, clusterOperationsetList, &listOpt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	hostConf, err := utils.CreateHostConfConfigMap(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	r.SetOwnerReferences(&hostConf.ObjectMeta, plan)
+	cm := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: hostConf.Namespace, Name: hostConf.Name}, cm)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, hostConf); err != nil {
+				scope.Logger.Error(err, "Create host conf configMap failed")
+				return err
+			}
+			return nil
+		}
+	}
+	err = r.Client.Update(ctx, hostConf)
+	if err != nil {
+		scope.Logger.Error(err, "Update host conf configMap failed")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	varsConf, err := utils.CreateVarsConfConfigMap(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	r.SetOwnerReferences(&varsConf.ObjectMeta, plan)
+
+	cm := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: varsConf.Namespace, Name: varsConf.Name}, cm)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, varsConf); err != nil {
+				scope.Logger.Error(err, "Create vars conf configMap failed")
+				return err
+			}
+			return nil
+		}
+	}
+
+	err = r.Client.Update(ctx, varsConf)
+	if err != nil {
+		scope.Logger.Error(err, "Update vars conf configMap failed")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PlanReconciler) syncOpsCluster(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	cluster := utils.CreateOpsCluster(plan)
+	r.SetOwnerReferences(&cluster.ObjectMeta, plan)
+	cl := &clusterv1alpha1.Cluster{}
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cl)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, cluster); err != nil {
+				scope.Logger.Error(err, "Create cluster failed")
+				return err
+			}
+			return nil
+		}
+	}
+
+	err = r.Client.Update(ctx, cluster)
+	if err != nil {
+		scope.Logger.Error(err, "Update cluster failed")
+		return err
+	}
 }
 
 // syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
@@ -1242,6 +1359,11 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
+	err = deleteAnsibleCluster(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1506,23 +1628,22 @@ func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.C
 	return nil
 }
 
-func deleteAnsiblePlan(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	ansiblePlanName := fmt.Sprintf("%s%s", plan.Name, utils.SSHSecretSuffix)
-	ansiblePlan := &ecnsv1.AnsiblePlan{}
-	err := client.Get(ctx, types.NamespacedName{Name: ansiblePlanName, Namespace: plan.Namespace}, ansiblePlan)
+func deleteAnsibleCluster(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	cl := &clusterv1alpha1.Cluster{}
+	err := client.Get(ctx, types.NamespacedName{Namespace: plan.Namespace, Name: plan.Spec.ClusterName}, cl)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			scope.Logger.Info("ansible plan has already been deleted")
+			scope.Logger.Error(err, "ansible cluster has already been deleted")
 			return nil
 		}
+		return err
 	}
 
-	err = client.Delete(ctx, ansiblePlan)
+	err = client.Delete(ctx, cl)
 	if err != nil {
-		scope.Logger.Error(err, "Delete ansible plan failed")
+		scope.Logger.Error(err, "Delete cluster failed")
 		return err
 	}
 
 	return nil
-
 }

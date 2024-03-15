@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -36,6 +37,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	RequeueAfter     = time.Second * 3
+	LoopForJobStatus = time.Second * 5
+	RetryInterval    = time.Millisecond * 300
+	RetryCount       = 5
+	ClusterLabel     = "ecns.easystack.io/cluster"
 )
 
 // ClusterOperationSetReconciler reconciles a ClusterOperationSet object
@@ -69,15 +78,24 @@ func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, err
+		log.Error(err, "Get clusterOperationSet failed")
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
-	log = log.WithValues("ClusterOperationSet", operationSet.Name)
 
-	operationSetBak := operationSet.DeepCopy()
+	log = log.WithValues("ClusterOperationSet", operationSet.Name)
 
 	patchHelper, err := patch.NewHelper(operationSet, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	needRequeue, err := r.SetLabelAnnotation(operationSet)
+	if err != nil {
+		log.Error(err, "Set clusterOperation  annotation failed")
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	if needRequeue {
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
 	if operationSet.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -106,17 +124,6 @@ func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.
 			return r.reconcileDelete(ctx, operationSet)
 		}
 	}
-
-	defer func() {
-		if operationSet.ObjectMeta.DeletionTimestamp.IsZero() {
-			r.EventRecorder.Eventf(operationSet, corev1.EventTypeNormal, ClusterOperationSetUpdateEvent, "patch %s/%s ClusterOperationSet status", operationSet.Namespace, operationSet.Name)
-			if err = utils.PatchClusterOperationSet(ctx, r.Client, operationSetBak, operationSet); err != nil {
-				if reterr == nil {
-					reterr = errors.Wrapf(err, "error patching ClusterOperationSet status %s/%s", operationSet.Namespace, operationSet.Name)
-				}
-			}
-		}
-	}()
 
 	return r.reconcileNormal(ctx, log, patchHelper, operationSet)
 }
@@ -147,7 +154,8 @@ func (r *ClusterOperationSetReconciler) reconcileNormal(ctx context.Context, log
 					Action:        "",
 				}
 			} else {
-				return ctrl.Result{}, err
+				log.Error(err, "Update ClusterOperation status failed, cannot get clusteroperation.")
+				return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 			}
 		} else {
 			status = ecnsv1.ClusterOperationStatus{
@@ -166,7 +174,7 @@ func (r *ClusterOperationSetReconciler) reconcileNormal(ctx context.Context, log
 	err = patchHelper.Patch(ctx, &newclusterOperationSet)
 	if err != nil {
 		log.Error(err, "Update clusterOperation failed!")
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
 	return ctrl.Result{}, nil
@@ -180,16 +188,16 @@ func (r *ClusterOperationSetReconciler) reconcileDelete(ctx context.Context, cos
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				log.Log.Info("ClusterOperation %s has already been deleted", co.Name)
-				return ctrl.Result{}, nil
+				continue
 			}
 		}
 
 		err = r.Client.Delete(ctx, clusterOperation)
 		if err != nil {
 			r.EventRecorder.Eventf(cos, corev1.EventTypeNormal, ClusterOperationsDeleteEvent, "Delete ClusterOperations %s failed: %s", clusterOperation.Name, err.Error())
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 		}
-		r.EventRecorder.Eventf(cos, corev1.EventTypeNormal, ClusterOperationsDeleteEvent, "Start delete ClusterOperations: %s", clusterOperation.Name)
+		r.EventRecorder.Eventf(cos, corev1.EventTypeNormal, ClusterOperationsDeleteEvent, "Delete ClusterOperation %s success", clusterOperation.Name)
 	}
 	return ctrl.Result{}, nil
 }
@@ -235,8 +243,8 @@ func (r *ClusterOperationSetReconciler) waitForOperationStatus(ctx context.Conte
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					es.ClusterOps.Status = utils.RunningStatus
-					ops := InitClusterOperation(es.ClusterOps, cos)
-					err = r.Client.Create(ctx, &ops)
+					ops := r.NewClusterOperation(es.ClusterOps, cos)
+					err = r.Client.Create(ctx, ops)
 					if err != nil {
 						errCh <- err
 						return
@@ -267,7 +275,7 @@ func (r *ClusterOperationSetReconciler) waitForOperationStatus(ctx context.Conte
 						// CR status changed to Failed or Complete, proceed to next step
 						goto Next
 					}
-					time.Sleep(time.Second * 60)
+					time.Sleep(time.Second * 30)
 				}
 			}
 		Next:
@@ -286,23 +294,56 @@ func (r *ClusterOperationSetReconciler) waitForOperationStatus(ctx context.Conte
 	return nil
 }
 
+func (r *ClusterOperationSetReconciler) NewClusterOperation(clusterOps *ecnsv1.ClusterOps, cos *ecnsv1.ClusterOperationSet) *clusteroperationv1alpha1.ClusterOperation {
+	clusterOperation := &clusteroperationv1alpha1.ClusterOperation{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cos.Namespace,
+			Name:      clusterOps.Name,
+		},
+		Spec: clusteroperationv1alpha1.Spec{
+			Cluster:      cos.Spec.Cluster,
+			Image:        cos.Spec.Image,
+			Action:       clusterOps.Action,
+			ActionSource: (*clusteroperationv1alpha1.ActionSource)(&clusterOps.ActionSource),
+			ActionType:   clusteroperationv1alpha1.ActionType(clusterOps.ActionType),
+			PreHook:      clusterOps.PreHook,
+		},
+	}
+	r.SetOwnerReferences(&clusterOperation.ObjectMeta, cos)
+
+	return clusterOperation
+}
+
+func (r *ClusterOperationSetReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, clusterOps *ecnsv1.ClusterOperationSet) {
+	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(clusterOps, ecnsv1.GroupVersion.WithKind("ClusterOperationSet"))}
+}
+
+func (r *ClusterOperationSetReconciler) SetLabelAnnotation(clusterOps *ecnsv1.ClusterOperationSet) (bool, error) {
+	if len(clusterOps.Annotations) == 0 || clusterOps.Annotations[ClusterLabel] != clusterOps.Name {
+		if clusterOps.Annotations == nil {
+			clusterOps.Annotations = map[string]string{}
+		}
+
+		clusterOps.Annotations[ClusterLabel] = clusterOps.Name
+	}
+
+	if len(clusterOps.Labels) == 0 || clusterOps.Labels[ClusterLabel] != clusterOps.Name {
+		if clusterOps.Labels == nil {
+			clusterOps.Labels = map[string]string{}
+		}
+		clusterOps.Labels[ClusterLabel] = clusterOps.Name
+	}
+
+	if err := r.Client.Update(context.Background(), clusterOps); err != nil {
+		return false, err
+	}
+
+	return true, nil // requeue
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterOperationSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ecnsv1.ClusterOperationSet{}).
 		Complete(r)
-}
-
-func InitClusterOperation(clusterOps *ecnsv1.ClusterOps, cos *ecnsv1.ClusterOperationSet) clusteroperationv1alpha1.ClusterOperation {
-	var clusterOperation = clusteroperationv1alpha1.ClusterOperation{}
-	clusterOperation.Name = clusterOps.Name
-	clusterOperation.Status.Status = clusterOps.Status
-	clusterOperation.Namespace = clusterOps.Namespace
-	clusterOperation.Spec.Cluster = cos.Spec.Cluster
-	clusterOperation.Spec.Image = cos.Spec.Image
-	clusterOperation.Spec.Action = clusterOps.Action
-	clusterOperation.Spec.ActionSource = (*clusteroperationv1alpha1.ActionSource)(&clusterOps.ActionSource)
-	clusterOperation.Spec.ActionType = clusteroperationv1alpha1.ActionType(clusterOps.ActionType)
-	clusterOperation.Spec.PreHook = clusterOps.PreHook
-	return clusterOperation
 }

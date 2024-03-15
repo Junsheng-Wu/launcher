@@ -37,8 +37,6 @@ const (
 	// MachineSetLabelName is the machine set label name
 	MachineSetLabelName = "cluster.x-k8s.io/set-name"
 
-	AnsibleFinalizer = "ansible.ecns.easystack.com"
-
 	ClusterOperationSetFinalizer = "clusteroperationset.ecns.easystack.com"
 
 	// MachineControlPlaneLabelName is the label set on machines or related objects that are part of a control plane.
@@ -138,9 +136,6 @@ type PlanSpec struct {
 	// UserInfo is the user of keystone auth
 	UserInfo User `json:"user,omitempty"`
 
-	// Execute ansible plan max retry times.
-	MaxRetryTime int `json:"maxRetryTime"`
-
 	// DeleteVolumeOnTermination is the flag to decide to delete volume on termination
 	DeleteVolumeOnTermination bool `json:"deleteVolumeOnTermination,omitempty"`
 
@@ -174,6 +169,20 @@ type HostConf struct {
 	// KubeLog is the kube log group
 	KubeLog []string `json:"kubeLog,omitempty"`
 }
+
+type AnsibleNode struct {
+	// Name is the name of the node
+	Name string `json:"name,omitempty"`
+	// AnsibleHost is the ansible host
+	AnsibleHost string `json:"ansibleHost,omitempty"`
+	// AnsibleIP is the ansible ip
+	AnsibleIP string `json:"ansibleIP,omitempty"`
+	// MemoryReserve is the memory reserve(GB),default is -4,always < 0.
+	MemoryReserve int64 `json:"memoryReserve,omitempty"`
+	// AnsibleSSHPrivateKeyFile is the ansible ssh private key file
+	AnsibleSSHPrivateKeyFile string `json:"ansibleSSHPrivateKeyFile,omitempty"`
+}
+
 
 // User is the user of keystone auth
 // include AuthUrl

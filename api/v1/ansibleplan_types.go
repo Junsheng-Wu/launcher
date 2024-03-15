@@ -29,7 +29,7 @@ type AnsiblePlanSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Type ExecType `json:"type"`
 	// NodePools are the node pools
-	Install *AnsibleInstall `json:"install,omitempty"`
+	// Install *AnsibleInstall `json:"install,omitempty"`
 	// AutoRun is the flag to indicate the plan is auto run
 	AutoRun bool `json:"autoRun"`
 	// ClusterName is the cluster name
@@ -44,31 +44,31 @@ type AnsiblePlanSpec struct {
 	MaxRetryTime int `json:"maxRetryTime"`
 }
 
-type AnsibleInstall struct {
-	// NodePools are the node pools,we need print the config
-	// like this:
-	//# cat /etc/ansible/hosts
-	NodePools []*AnsibleNode `json:"nodePools,omitempty"`
-	//Bastion
-	Bastion *AnsibleNode `json:"bastion"`
-	// Etcd is the etcd group
-	Etcd []string `json:"etcd,omitempty"`
-	// KubeMaster is the kube master group
-	KubeMaster []string `json:"kubeMaster,omitempty"`
-	// KubeNode is the kube node group
-	KubeNode []string `json:"kubeNode,omitempty"`
-	// KubeIngress is the kube ingress group
-	KubeIngress []string `json:"kubeIngress,omitempty"`
-	// KubePrometheus is the kube prometheus group
-	KubePrometheus []string `json:"kubePrometheus,omitempty"`
-	// KubeLog is the kube log group
-	KubeLog []string `json:"kubeLog,omitempty"`
-	// OtherGroup is the other group
-	OtherGroup map[string][]string `json:"otherGroup,omitempty"`
-	// OtherAnsibleOpts is the ansible custome vars
-	// OtherAnsibleOpts => ansible test/vars.yaml
-	OtherAnsibleOpts map[string]string `json:"other_ansible_opts,omitempty"`
-}
+// type AnsibleInstall struct {
+// 	// NodePools are the node pools,we need print the config
+// 	// like this:
+// 	//# cat /etc/ansible/hosts
+// 	NodePools []*AnsibleNode `json:"nodePools,omitempty"`
+// 	//Bastion
+// 	Bastion *AnsibleNode `json:"bastion"`
+// 	// Etcd is the etcd group
+// 	Etcd []string `json:"etcd,omitempty"`
+// 	// KubeMaster is the kube master group
+// 	KubeMaster []string `json:"kubeMaster,omitempty"`
+// 	// KubeNode is the kube node group
+// 	KubeNode []string `json:"kubeNode,omitempty"`
+// 	// KubeIngress is the kube ingress group
+// 	KubeIngress []string `json:"kubeIngress,omitempty"`
+// 	// KubePrometheus is the kube prometheus group
+// 	KubePrometheus []string `json:"kubePrometheus,omitempty"`
+// 	// KubeLog is the kube log group
+// 	KubeLog []string `json:"kubeLog,omitempty"`
+// 	// OtherGroup is the other group
+// 	OtherGroup map[string][]string `json:"otherGroup,omitempty"`
+// 	// OtherAnsibleOpts is the ansible custome vars
+// 	// OtherAnsibleOpts => ansible test/vars.yaml
+// 	OtherAnsibleOpts map[string]string `json:"other_ansible_opts,omitempty"`
+// }
 
 type AnsibleNode struct {
 	// Name is the name of the node

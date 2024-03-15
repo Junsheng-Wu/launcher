@@ -16,6 +16,7 @@ import (
 	cc "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
 )
 
 // main.go is the entrypoint for the plan controller manager.
@@ -33,6 +34,7 @@ func init() {
 	utilruntime.Must(clusteropenstack.AddToScheme(scheme))
 	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(kubeadm.AddToScheme(scheme))
+	utilruntime.Must(clusteroperationv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

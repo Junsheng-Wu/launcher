@@ -36,107 +36,13 @@ spec:
             description: AnsiblePlanSpec defines the desired state of AnsiblePlan
             properties:
               autoRun:
-                description: AutoRun is the flag to indicate the plan is auto run
+                description: NodePools are the node pools Install *AnsibleInstall
+                  `json:"install,omitempty"` AutoRun is the flag to indicate the plan
+                  is auto run
                 type: boolean
               clusterName:
                 description: ClusterName is the cluster name
                 type: string
-              install:
-                description: NodePools are the node pools
-                properties:
-                  bastion:
-                    description: Bastion
-                    properties:
-                      ansibleHost:
-                        description: AnsibleHost is the ansible host
-                        type: string
-                      ansibleIP:
-                        description: AnsibleIP is the ansible ip
-                        type: string
-                      ansibleSSHPrivateKeyFile:
-                        description: AnsibleSSHPrivateKeyFile is the ansible ssh private
-                          key file
-                        type: string
-                      memoryReserve:
-                        description: MemoryReserve is the memory reserve(GB),default
-                          is -4,always < 0.
-                        format: int64
-                        type: integer
-                      name:
-                        description: Name is the name of the node
-                        type: string
-                    type: object
-                  etcd:
-                    description: Etcd is the etcd group
-                    items:
-                      type: string
-                    type: array
-                  kubeIngress:
-                    description: KubeIngress is the kube ingress group
-                    items:
-                      type: string
-                    type: array
-                  kubeLog:
-                    description: KubeLog is the kube log group
-                    items:
-                      type: string
-                    type: array
-                  kubeMaster:
-                    description: KubeMaster is the kube master group
-                    items:
-                      type: string
-                    type: array
-                  kubeNode:
-                    description: KubeNode is the kube node group
-                    items:
-                      type: string
-                    type: array
-                  kubePrometheus:
-                    description: KubePrometheus is the kube prometheus group
-                    items:
-                      type: string
-                    type: array
-                  nodePools:
-                    description: 'NodePools are the node pools,we need print the config
-                      like this: # cat /etc/ansible/hosts'
-                    items:
-                      properties:
-                        ansibleHost:
-                          description: AnsibleHost is the ansible host
-                          type: string
-                        ansibleIP:
-                          description: AnsibleIP is the ansible ip
-                          type: string
-                        ansibleSSHPrivateKeyFile:
-                          description: AnsibleSSHPrivateKeyFile is the ansible ssh
-                            private key file
-                          type: string
-                        memoryReserve:
-                          description: MemoryReserve is the memory reserve(GB),default
-                            is -4,always < 0.
-                          format: int64
-                          type: integer
-                        name:
-                          description: Name is the name of the node
-                          type: string
-                      type: object
-                    type: array
-                  other_ansible_opts:
-                    additionalProperties:
-                      type: string
-                    description: OtherAnsibleOpts is the ansible custome vars OtherAnsibleOpts
-                      => ansible test/vars.yaml
-                    type: object
-                  otherGroup:
-                    additionalProperties:
-                      items:
-                        type: string
-                      type: array
-                    description: OtherGroup is the other group
-                    type: object
-                required:
-                - bastion
-                type: object
               maxRetryTime:
                 description: Execute ansible plan max retry times.
                 type: integer

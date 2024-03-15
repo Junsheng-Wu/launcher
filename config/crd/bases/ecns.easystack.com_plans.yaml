@@ -35,9 +35,6 @@ spec:
           spec:
             description: PlanSpec defines the desired state of Plan
             properties:
-              ansible_plan_auto:
-                description: AnsiblePlanAuto  decide to auto to run ansible plan
-                type: boolean
               cluster_name:
                 description: ClusterName is the cluster name => clusters.cluster.x-k8s.io
                   --------------------------------=> openstackclusters.infrastructure.cluster.x-k8s.io
@@ -61,6 +58,92 @@ spec:
               external_network_id:
                 description: externalNetworkId is the external network id WHEN use_float_ip
                   is true, we will get a fip from this network
+                type: string
+              hostConf:
+                description: NodesInfo are the node pools
+                properties:
+                  bastion:
+                    description: Bastion
+                    properties:
+                      ansibleHost:
+                        description: AnsibleHost is the ansible host
+                        type: string
+                      ansibleIP:
+                        description: AnsibleIP is the ansible ip
+                        type: string
+                      ansibleSSHPrivateKeyFile:
+                        description: AnsibleSSHPrivateKeyFile is the ansible ssh private
+                          key file
+                        type: string
+                      memoryReserve:
+                        description: MemoryReserve is the memory reserve(GB),default
+                          is -4,always < 0.
+                        format: int64
+                        type: integer
+                      name:
+                        description: Name is the name of the node
+                        type: string
+                    type: object
+                  etcd:
+                    description: Etcd is the etcd group
+                    items:
+                      type: string
+                    type: array
+                  kubeIngress:
+                    description: KubeIngress is the kube ingress group
+                    items:
+                      type: string
+                    type: array
+                  kubeLog:
+                    description: KubeLog is the kube log group
+                    items:
+                      type: string
+                    type: array
+                  kubeMaster:
+                    description: KubeMaster is the kube master group
+                    items:
+                      type: string
+                    type: array
+                  kubeNode:
+                    description: KubeNode is the kube node group
+                    items:
+                      type: string
+                    type: array
+                  kubePrometheus:
+                    description: KubePrometheus is the kube prometheus group
+                    items:
+                      type: string
+                    type: array
+                  nodePools:
+                    description: 'NodePools are the node pools,we need print the config
+                      like this: # cat /etc/ansible/hosts'
+                    items:
+                      properties:
+                        ansibleHost:
+                          description: AnsibleHost is the ansible host
+                          type: string
+                        ansibleIP:
+                          description: AnsibleIP is the ansible ip
+                          type: string
+                        ansibleSSHPrivateKeyFile:
+                          description: AnsibleSSHPrivateKeyFile is the ansible ssh
+                            private key file
+                          type: string
+                        memoryReserve:
+                          description: MemoryReserve is the memory reserve(GB),default
+                            is -4,always < 0.
+                          format: int64
+                          type: integer
+                        name:
+                          description: Name is the name of the node
+                          type: string
+                      type: object
+                    type: array
+                required:
+                - bastion
+                type: object
+              hostConfName:
+                description: HostConfName is the name of hostConf configMap
                 type: string
               k8sVersion:
                 description: K8sVersion is the version of kubernetes => ansible kubernetes
@@ -245,6 +328,9 @@ spec:
                 - region
                 - token
                 type: object
+              varsConfName:
+                description: VarsConfName is the name of varsConf configMap
+                type: string
             required:
             - cluster_name
             - cni_type

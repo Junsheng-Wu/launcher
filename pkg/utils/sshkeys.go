@@ -93,45 +93,45 @@ func GetSecretByName(ctx context.Context, client client.Client, secretName strin
 	return pub, pri, nil
 }
 
-// GetOrCreateSSHkeyFile  create private key file
-func GetOrCreateSSHkeyFile(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
-	path := fmt.Sprintf("/root/.ssh/id_rsa_%s", ansible.Spec.ClusterName)
-	// judge if path of file exists
-	if FileExist(path) {
-		// delete file
-		err := os.RemoveAll(path)
-		if err != nil {
-			return err
-		}
-	}
-	// get public key and private key
-	_, pri, err := GetSecretByName(context.Background(), cli, ansible.Spec.SSHSecret, ansible.Namespace)
-	if err != nil {
-		return err
-	}
+// // GetOrCreateSSHkeyFile  create private key file
+// func GetOrCreateSSHkeyFile(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
+// 	path := fmt.Sprintf("/root/.ssh/id_rsa_%s", ansible.Spec.ClusterName)
+// 	// judge if path of file exists
+// 	if FileExist(path) {
+// 		// delete file
+// 		err := os.RemoveAll(path)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	// get public key and private key
+// 	_, pri, err := GetSecretByName(context.Background(), cli, ansible.Spec.SSHSecret, ansible.Namespace)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// create file
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
+// 	// create file
+// 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	defer file.Close()
+// 	defer file.Close()
 
-	_, err = file.Write([]byte(pri))
-	if err != nil {
-		return err
-	}
+// 	_, err = file.Write([]byte(pri))
+// 	if err != nil {
+// 		return err
+// 	}
 
-	for i, pool := range ansible.Spec.Install.NodePools {
-		if pool.AnsibleSSHPrivateKeyFile == "" {
-			ansible.Spec.Install.NodePools[i].AnsibleSSHPrivateKeyFile = path
-		}
-	}
-	ansible.Spec.Install.OtherAnsibleOpts["ansible_user"] = "root"
-	ansible.Spec.Install.OtherAnsibleOpts["ansible_ssh_private_key_file"] = path
-	return nil
-}
+// 	for i, pool := range ansible.Spec.Install.NodePools {
+// 		if pool.AnsibleSSHPrivateKeyFile == "" {
+// 			ansible.Spec.Install.NodePools[i].AnsibleSSHPrivateKeyFile = path
+// 		}
+// 	}
+// 	ansible.Spec.Install.OtherAnsibleOpts["ansible_user"] = "root"
+// 	ansible.Spec.Install.OtherAnsibleOpts["ansible_ssh_private_key_file"] = path
+// 	return nil
+// }
 
 func FileExist(path string) bool {
 	_, err := os.Lstat(path)

@@ -41,6 +41,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
 	"github.com/gophercloud/gophercloud/pagination"
+	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -1206,6 +1207,11 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
+	err = deleteKubean(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
 	err = deleteCluster(ctx, r.Client, scope, plan)
 	if err != nil {
 		return err
@@ -1236,6 +1242,37 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
+	return nil
+}
+
+func deleteKubean(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
+	// get clusterOperationSet  obj to list all ClusterOperationSet in  cluster
+	sets := ecnsv1.ClusterOperationSetList{}
+	err := cli.List(ctx, &sets)
+	if err != nil {
+		return err
+	}
+	for index, set := range sets.Items {
+		if set.Annotations[ecnsv1.KubeanAnnotation] != plan.Spec.ClusterName {
+			continue
+		} else {
+			err = cli.Delete(ctx, &sets.Items[index])
+			if err != nil {
+				return err
+			}
+		}
+	}
+	// delete kubean cluster
+	var kubeanCluster kubeancluster1alpha1.Cluster
+	kubeanCluster.Name = plan.Spec.ClusterName
+	err = cli.Delete(ctx, &kubeanCluster)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 

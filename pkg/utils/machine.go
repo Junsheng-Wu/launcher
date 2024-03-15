@@ -3,13 +3,24 @@ package utils
 import (
 	"context"
 	ecnsv1 "easystack.com/plan/api/v1"
+	"easystack.com/plan/pkg/scope"
+	"fmt"
+	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
+	machineerror "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"time"
+)
+
+const (
+	retryWaitInstanceStatus = 10 * time.Second
+	timeoutInstanceReady    = 120 * time.Second
 )
 
 // MachineToInfrastructureMapFunc returns a handler.ToRequestsFunc that watches for
@@ -67,4 +78,83 @@ func GetMachineByName(ctx context.Context, c client.Client, namespace, name stri
 		return nil, err
 	}
 	return m, nil
+}
+
+// WaitAllMachineReady wait all machine ready
+// 1. poll wait machine ready
+// 2. if machine is not ready status and FailureReason!=nil,we need give error about instance id and error message
+// 3.we need update plan status and give information once if not all ready in two minutes.
+func WaitAllMachineReady(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
+
+	//TODO check new machine has created and InfrastructureRef !=nil,or give a reason to user
+	var errorMessage = make(map[string]ecnsv1.MachineFailureReason)
+
+	err := PollImmediate(retryWaitInstanceStatus, timeoutInstanceReady, func() (bool, error) {
+		var openstackMachines clusteropenstack.OpenStackMachineList
+		labels := map[string]string{ecnsv1.MachineSetClusterLabelName: plan.Spec.ClusterName}
+		err := cli.List(ctx, &openstackMachines, client.InNamespace(plan.Namespace), client.MatchingLabels(labels))
+		if err != nil {
+			return false, err
+		}
+		var NoReadyCount int64
+		for _, oMachine := range openstackMachines.Items {
+			if !oMachine.Status.Ready {
+				// get condition error,such as instance quotas exceed
+				conditions := oMachine.GetConditions()
+				condition := judgeConditions(conditions)
+				if condition.Reason != "" {
+					conditionError := machineerror.MachineStatusError(condition.Reason)
+					InstanceError := ecnsv1.MachineFailureReason{
+						Type:    ecnsv1.ConditionError,
+						Reason:  &conditionError,
+						Message: &condition.Message,
+					}
+					errorMessage[oMachine.Name] = InstanceError
+				}
+				// get instance error message
+				if oMachine.Status.FailureReason != nil || oMachine.Status.FailureMessage != nil {
+					InstanceError := ecnsv1.MachineFailureReason{
+						Type:    ecnsv1.InstanceError,
+						Reason:  oMachine.Status.FailureReason,
+						Message: oMachine.Status.FailureMessage,
+					}
+					errorMessage[oMachine.Name] = InstanceError
+				}
+
+				NoReadyCount++
+			}
+		}
+		if NoReadyCount > 0 && len(errorMessage) == 0 {
+			return false, nil
+		} else if NoReadyCount > 0 && len(errorMessage) > 0 {
+			return true, errors.New("VM create failed")
+		}
+		return true, nil
+	})
+
+	if len(errorMessage) > 0 {
+		plan = ecnsv1.SetPlanPhase(plan, ecnsv1.VM, ecnsv1.Failed)
+		plan.Status.VMFailureReason = errorMessage
+		//try to update plan status
+		if errM := cli.SubResource("status").Update(ctx, plan); errM != nil {
+			scope.Logger.Error(errM, "update plan vm status failed")
+		}
+		return errors.Wrapf(err, fmt.Sprintf("wait for OpenstackMachine ready error,cluster:%s", plan.Spec.ClusterName))
+	}
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("wait for OpenstackMachine ready timeout,cluster:%s", plan.Spec.ClusterName))
+	}
+	scope.Logger.Info("machine all has ready,continue task")
+	return nil
+}
+
+// judgeConditions judge the conditions of the machine when the condition.severity is error,return this condition
+func judgeConditions(conditions clusterapi.Conditions) clusterapi.Condition {
+	for _, con := range conditions {
+		if con.Severity == clusterapi.ConditionSeverityError {
+			return con
+		}
+	}
+	return clusterapi.Condition{}
+
 }

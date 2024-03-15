@@ -19,6 +19,7 @@ package v1
 import (
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/cluster-api/errors"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -216,6 +217,7 @@ type MachineSetReconcile struct {
 	// such as init disk...
 	CloudInit string `json:"init,omitempty"`
 }
+
 type Infras struct {
 	// UID is the uid of infra
 	UID string `json:"uid"`
@@ -235,14 +237,19 @@ type Infras struct {
 	// replica is the replica of machine
 	Replica int32 `json:"replica"`
 }
+
 type volume struct {
 	// VolumeType is the volume type of machine
 	VolumeType string `json:"volume_type"`
 	// VolumeSize is the volume size of machine
 	VolumeSize int `json:"volume_size"`
+	// AvailabilityZone are a set of failure domains for volume
+	// decide the every volume's AZ
+	AvailabilityZone string `json:"availability_zone"`
 	// Index is the index of volume 0==root volume
 	Index int `json:"index"`
 }
+
 type Subnet struct {
 	// SubnetNetwork is the network of subnet
 	SubnetNetwork string `json:"subnet_network"`
@@ -258,10 +265,10 @@ type PlanStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	//ServerGroupID is the server group id of cluster
 	ServerGroupID *Servergroups `json:"server_group_id,omitempty"`
-	// VMDone show the vm is created or not
-	VMDone bool `json:"vm_done,omitempty"`
-	// OpenstackMachineList is the list of openstack machine
-	OpenstackMachineList []clusteropenstack.OpenStackMachine `json:"openstack_machine_list,omitempty"`
+	// Phase is the plan phase
+	Phase map[PlanType]PlanPhase `json:"phase"`
+	// VMFailureReason is the error which vm was created
+	VMFailureReason map[string]MachineFailureReason `json:"VMFailureReason,omitempty"`
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
 	InfraMachine map[string]InfraMachine `json:"infra_machine,omitempty"`
 	// PlanLoadBalancer is the list of load balancer of plan
@@ -269,6 +276,35 @@ type PlanStatus struct {
 	// Bastion is the bastion of plan
 	Bastion *clusteropenstack.Instance `json:"bastion,omitempty"`
 }
+
+type PlanType string
+
+const (
+	VM             PlanType = "VM"
+	GenerateConfig PlanType = "GenerationConfig"
+	Check          PlanType = "Check"
+)
+
+type PlanPhase string
+
+const (
+	Processing PlanPhase = "Processing"
+	Failed     PlanPhase = "Failed"
+	Completed  PlanPhase = "Completed"
+)
+
+type MachineFailureReason struct {
+	Type    MachineFailureType         `json:"type"`
+	Reason  *errors.MachineStatusError `json:"reason"`
+	Message *string                    `json:"message"`
+}
+
+type MachineFailureType string
+
+const (
+	InstanceError  MachineFailureType = "InstanceError"
+	ConditionError MachineFailureType = "ConditionError"
+)
 
 // LoadBalancer represents basic information about the associated OpenStack LoadBalancer.
 type LoadBalancer struct {
@@ -344,4 +380,24 @@ type PlanList struct {
 
 func init() {
 	SchemeBuilder.Register(&Plan{}, &PlanList{})
+}
+
+// SetPlanPhase set plan phase status
+func SetPlanPhase(plan *Plan, planType PlanType, planPhase PlanPhase) *Plan {
+	var phase = make(map[PlanType]PlanPhase)
+	if len(plan.Status.Phase) == 0 {
+		plan.Status.Phase = phase
+	}
+	switch planType {
+	case VM:
+		plan.Status.Phase[VM] = planPhase
+		if planPhase != Failed {
+			plan.Status.VMFailureReason = nil
+		}
+	case GenerateConfig:
+		plan.Status.Phase[GenerateConfig] = planPhase
+	case Check:
+		plan.Status.Phase[Check] = planPhase
+	}
+	return plan
 }

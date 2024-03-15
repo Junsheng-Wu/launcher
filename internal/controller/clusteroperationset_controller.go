@@ -71,7 +71,6 @@ func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.
 	var (
 		log = log.FromContext(ctx)
 	)
-
 	// Fetch the OpenStackMachine instance.
 	operationSet := &ecnsv1.ClusterOperationSet{}
 	err := r.Client.Get(ctx, req.NamespacedName, operationSet)

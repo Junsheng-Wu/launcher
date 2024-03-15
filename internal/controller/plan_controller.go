@@ -1207,11 +1207,10 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
-	// when add sync kubeconfig and add this func
-	//err = deleteKubean(ctx, r.Client, plan)
-	//if err != nil {
-	//	return err
-	//}
+	err = deleteKubean(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
 
 	err = deleteCluster(ctx, r.Client, scope, plan)
 	if err != nil {

@@ -108,6 +108,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func concurrency(c int) cc.Options {
 	return cc.Options{MaxConcurrentReconciles: c}
 }

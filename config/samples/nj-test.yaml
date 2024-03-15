@@ -7,15 +7,15 @@ metadata:
     app.kubernetes.io/part-of: easystack-eks-op
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: easystack-eks-op
-  name: plan-mj-test
+  name: plan-of-sloth
   namespace: sloth
 spec:
   mode: "new"
   k8sVersion: "v1.26.4-es"
   support_python3: false
   lb_enable: false
-  cluster_name: "test3"
-  ssh_key: "zhouya"
+  cluster_name: "slothcluster"
+  ssh_key: "sloth"
   use_float_ip: false
   node_cidr: "10.6.0.0/24"
   other_ansible_opts:
@@ -30,59 +30,54 @@ spec:
     - "ingress1"
   need_load_balancer: []
   machine_sets:
-    - name: "test-master"
+    - name: "ironic-master"
       role: "master"
-      number: 2
+      number: 1
       infras:
         - uid: "7d2d"
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
               volume_size: 150
+              availability_zone: "default-az"
               index: 1
             - volume_type: "hdd"
               volume_size: 10
+              availability_zone: "default-az"
               index: 2
             - volume_type: "hdd"
               volume_size: 5
+              availability_zone: "default-az"
               index: 3
-          image: "eks-kylin-x86_64"
+          image: "loadbalancer-image-240313-x86_64"
           flavor: "8C-8G"
-          replica: 2
-        - uid: "7d3d"
-          availability_zone: "default-az"
-          volumes:
-            - volume_type: "hdd"
-              volume_size: 150
-              index: 1
-            - volume_type: "hdd"
-              volume_size: 5
-              index: 2
-            - volume_type: "hdd"
-              volume_size: 5
-              index: 3
-          image: "eks-kylin-x86_64"
-          flavor: "8C-8G"
-          replica: 0
-    - name: "test-node"
-      number: 0
+          replica: 1
+          serverMetadata:
+            "reserve_instance_type": "normal"
+    - name: "sloth-node"
+      number: 1
       role: "node"
       infras:
         - uid: "bb85"
-          availability_zone: "default-az"
+          availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
           volumes:
             - volume_type: "hdd"
-              volume_size: 150
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 1
             - volume_type: "hdd"
-              volume_size: 10
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 2
             - volume_type: "hdd"
-              volume_size: 5
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 3
-          image: "eks-kylin-x86_64"
-          flavor: "8C-8G"
-          replica: 0
+          image: "rocky93"
+          flavor: "1C-1G"
+          replica: 1
+          serverMetadata:
+            "reserve_instance_type": "baremetal"
   monitor:
     pvc_type: "cinder"
     pvc_cap: "10"
@@ -95,7 +90,7 @@ spec:
   deleteVolumeOnTermination: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABl6qn_NtTmpvDBJro_ZpdQL5UK9TFXnSU8oQ96tnCiMoD7zoauZZzeg_YUQgFEZ56PsLrGsWJCEaxn-gAUNQH7tXGs411GPlQqxMNLuGljtuvANtefJWwKk3vAPKPtW-LBDip7wWnYKWr38HqA5VOsJjEt282CUt5PTC0akpLOXPj_Wzs"
+    token: "gAAAAABl9BFjDwHYsGguy4RpePaa9nhGQ-Uf8apN90Xkedq3mdoUdHIYvokPmaLIjZzj-bZkfRVSU6WMvTrFau8MvmcutauQO8LToRPVTE-19g_vFBUOAu4rs6Km0HWiCzK2UqfCuNPapi3SoaHZgLMLmLMGQbeDwIqjGFjrGWHNJgg5h8R6ED0"
     region: "RegionOne"
 
 

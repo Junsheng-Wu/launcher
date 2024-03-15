@@ -31,9 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	ecnsv1 "easystack.com/plan/api/v1"
-	"easystack.com/plan/internal/controller"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	"k8s.io/apimachinery/pkg/runtime"

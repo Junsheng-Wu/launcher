@@ -46,7 +46,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -447,17 +446,6 @@ func (r *PlanReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, p
 	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(plan, ecnsv1.GroupVersion.WithKind("Plan"))}
 }
 
-func (r *PlanReconciler) cleanClusterOperationSet(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	clusterOperationsetList := &ecnsv1.ClusterOperationSetList{}
-	listOpt := client.ListOptions{LabelSelector: labels.SelectorFromSet(labels.Set{ClusterLabel: plan.Spec.ClusterName})}
-	err := r.Client.List(ctx, clusterOperationsetList, &listOpt)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	hostConf, err := utils.CreateHostConfConfigMap(ctx, r.Client, plan)
 	if err != nil {
@@ -534,6 +522,8 @@ func (r *PlanReconciler) syncOpsCluster(ctx context.Context, scope *scope.Scope,
 		scope.Logger.Error(err, "Update cluster failed")
 		return err
 	}
+
+	return nil
 }
 
 // syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
@@ -1324,7 +1314,7 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
-	err = deleteKubean(ctx, r.Client, plan)
+	err = deleteClusterOperationSets(ctx, r.Client, plan)
 	if err != nil {
 		return err
 	}
@@ -1367,7 +1357,7 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	return nil
 }
 
-func deleteKubean(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
+func deleteClusterOperationSets(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
 	// get clusterOperationSet  obj to list all ClusterOperationSet in  cluster
 	sets := ecnsv1.ClusterOperationSetList{}
 	err := cli.List(ctx, &sets)
@@ -1397,6 +1387,18 @@ func deleteKubean(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) err
 	}
 	return nil
 }
+
+// func (r *PlanReconciler) cleanClusterOperationSet(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+// 	clusterOperationsetList := &ecnsv1.ClusterOperationSetList{}
+// 	listOpt := client.ListOptions{LabelSelector: labels.SelectorFromSet(labels.Set{ClusterLabel: plan.Spec.ClusterName})}
+// 	err := r.Client.List(ctx, clusterOperationsetList, &listOpt)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
+
 
 func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	if plan.Spec.LBEnable {

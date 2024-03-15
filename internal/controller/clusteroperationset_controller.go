@@ -44,7 +44,6 @@ const (
 	LoopForJobStatus = time.Second * 5
 	RetryInterval    = time.Millisecond * 300
 	RetryCount       = 5
-	ClusterLabel     = "ecns.easystack.io/cluster"
 )
 
 // ClusterOperationSetReconciler reconciles a ClusterOperationSet object
@@ -102,8 +101,8 @@ func (r *ClusterOperationSetReconciler) Reconcile(ctx context.Context, req ctrl.
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		if !StringInArray(ecnsv1.AnsibleFinalizer, operationSet.ObjectMeta.Finalizers) {
-			operationSet.ObjectMeta.Finalizers = append(operationSet.ObjectMeta.Finalizers, ecnsv1.AnsibleFinalizer)
+		if !StringInArray(ecnsv1.ClusterOperationSetFinalizer, operationSet.ObjectMeta.Finalizers) {
+			operationSet.ObjectMeta.Finalizers = append(operationSet.ObjectMeta.Finalizers, ecnsv1.ClusterOperationSetFinalizer)
 			if err := r.Update(context.Background(), operationSet); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -319,19 +318,19 @@ func (r *ClusterOperationSetReconciler) SetOwnerReferences(objectMetaData *metav
 }
 
 func (r *ClusterOperationSetReconciler) SetLabelAnnotation(clusterOps *ecnsv1.ClusterOperationSet) (bool, error) {
-	if len(clusterOps.Annotations) == 0 || clusterOps.Annotations[ClusterLabel] != clusterOps.Name {
+	if len(clusterOps.Annotations) == 0 || clusterOps.Annotations[ecnsv1.KubeanAnnotation] != clusterOps.Name {
 		if clusterOps.Annotations == nil {
 			clusterOps.Annotations = map[string]string{}
 		}
 
-		clusterOps.Annotations[ClusterLabel] = clusterOps.Name
+		clusterOps.Annotations[ecnsv1.KubeanAnnotation] = clusterOps.Name
 	}
 
-	if len(clusterOps.Labels) == 0 || clusterOps.Labels[ClusterLabel] != clusterOps.Name {
+	if len(clusterOps.Labels) == 0 || clusterOps.Labels[ecnsv1.KubeanLabel] != clusterOps.Name {
 		if clusterOps.Labels == nil {
 			clusterOps.Labels = map[string]string{}
 		}
-		clusterOps.Labels[ClusterLabel] = clusterOps.Name
+		clusterOps.Labels[ecnsv1.KubeanLabel] = clusterOps.Name
 	}
 
 	if err := r.Client.Update(context.Background(), clusterOps); err != nil {

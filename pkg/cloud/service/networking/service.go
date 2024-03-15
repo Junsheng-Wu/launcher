@@ -17,10 +17,11 @@ limitations under the License.
 package networking
 
 import (
-	"easystack.com/plan/pkg/scope"
 	"fmt"
-	"github.com/easystack/cluster-api-provider-openstack/pkg/record"
 	"sort"
+
+	"easystack.com/plan/pkg/scope"
+	"github.com/easystack/cluster-api-provider-openstack/pkg/record"
 
 	"github.com/go-logr/logr"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/attributestags"

@@ -3,7 +3,7 @@ module easystack.com/plan
 go 1.19
 
 require (
-	github.com/easystack/cluster-api-provider-openstack v0.6.9
+	github.com/easystack/cluster-api-provider-openstack v0.6.10-0.20240313061046-77291cfa7585
 	github.com/go-logr/logr v1.2.3
 	github.com/golang/mock v1.6.0
 	github.com/gophercloud/gophercloud v1.1.0

@@ -3,18 +3,22 @@ package utils
 import (
 	"bytes"
 	"context"
-	ecnsv1 "easystack.com/plan/api/v1"
-	"easystack.com/plan/pkg/cloud/service/provider"
-	"easystack.com/plan/pkg/cloudinit"
-	"easystack.com/plan/pkg/scope"
 	"encoding/base64"
 	"encoding/json"
 	errNew "errors"
 	"fmt"
+	"text/template"
+	"time"
+
+	ecnsv1 "easystack.com/plan/api/v1"
+	"easystack.com/plan/pkg/cloudinit"
+	"easystack.com/plan/pkg/scope"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
+	capoprovider "github.com/easystack/cluster-api-provider-openstack/pkg/cloud/services/provider"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/jsonmergepatch"
 	"k8s.io/utils/pointer"
@@ -22,8 +26,6 @@ import (
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	"text/template"
-	"time"
 )
 
 const (
@@ -92,11 +94,11 @@ func CreateMachineSet(ctx context.Context, scope *scope.Scope, client client.Cli
 	if err != nil {
 		return err
 	}
-	err = getOrCreateCloudInitSecret(ctx, scope, client, plan, set)
+	err = getOrCreateCloudInitSecret(ctx, client, plan, set)
 	if err != nil {
 		return err
 	}
-	err = createMachineset(ctx, scope, client, plan, set, 0)
+	err = createMachineset(ctx, client, plan, set, 0)
 
 	if err != nil {
 		return err
@@ -110,7 +112,7 @@ func AddReplicas(ctx context.Context, scope *scope.Scope, cli client.Client, tar
 	if err != nil {
 		return err
 	}
-	err = getOrCreateCloudInitSecret(ctx, scope, cli, plan, target)
+	err = getOrCreateCloudInitSecret(ctx, cli, plan, target)
 	if err != nil {
 		return err
 	}
@@ -277,6 +279,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 		scope.Logger.Error(fmt.Errorf("index out of range infra"), "check plan machinesetreconcile infra")
 		return errNew.New("index out of range infra")
 	}
+
 	infra := set.Infra[index]
 	// get openstacktemplate by name ,if not exist,create it
 	var openstackTemplate clusteropenstack.OpenStackMachineTemplate
@@ -289,94 +292,109 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 		if apierrors.IsNotFound(err) {
 			// create openstacktemplate
 			// add label to openstacktemplate with infra uid
-			openstackTemplate.ObjectMeta.Labels = map[string]string{
-				LabelTemplateInfra:    infra.UID,
-				LabelEasyStackCluster: plan.Spec.ClusterName,
+			openstackTemplate = clusteropenstack.OpenStackMachineTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						LabelTemplateInfra:    infra.UID,
+						LabelEasyStackCluster: plan.Spec.ClusterName,
+					},
+					Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
+					Namespace: plan.Namespace,
+				},
+				Spec: clusteropenstack.OpenStackMachineTemplateSpec{
+					Template: clusteropenstack.OpenStackMachineTemplateResource{
+						Spec: clusteropenstack.OpenStackMachineSpec{
+							Flavor:     infra.Flavor,
+							Image:      infra.Image,
+							SSHKeyName: plan.Spec.SshKey,
+							CloudName:  plan.Spec.ClusterName,
+							IdentityRef: &clusteropenstack.OpenStackIdentityReference{
+								Kind: "Secret",
+								Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc"),
+							},
+							DeleteVolumeOnTermination: plan.Spec.DeleteVolumeOnTermination,
+						},
+					},
+				},
 			}
-			openstackTemplate.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID)
-			openstackTemplate.Namespace = plan.Namespace
-			openstackTemplate.Spec.Template.Spec.Flavor = infra.Flavor
-			openstackTemplate.Spec.Template.Spec.Image = infra.Image
-			openstackTemplate.Spec.Template.Spec.SSHKeyName = plan.Spec.SshKey
-			openstackTemplate.Spec.Template.Spec.CloudName = plan.Spec.ClusterName
-			openstackTemplate.Spec.Template.Spec.IdentityRef = &clusteropenstack.OpenStackIdentityReference{}
-			secretName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc")
-			openstackTemplate.Spec.Template.Spec.IdentityRef.Kind = "Secret"
-			openstackTemplate.Spec.Template.Spec.IdentityRef.Name = secretName
-			openstackTemplate.Spec.Template.Spec.DeleteVolumeOnTermination = plan.Spec.DeleteVolumeOnTermination
-			openstackTemplate.Spec.Template.Spec.RootVolume = &clusteropenstack.RootVolume{}
+
 			for _, volume := range infra.Volumes {
 				if volume.Index == 1 {
-					openstackTemplate.Spec.Template.Spec.RootVolume.VolumeType = volume.VolumeType
-					openstackTemplate.Spec.Template.Spec.RootVolume.Size = volume.VolumeSize
-				} else {
-					openstackTemplate.Spec.Template.Spec.CustomeVolumes = append(openstackTemplate.Spec.Template.Spec.CustomeVolumes, &clusteropenstack.RootVolume{
+					openstackTemplate.Spec.Template.Spec.RootVolume = &clusteropenstack.RootVolume{
 						Size:       volume.VolumeSize,
 						VolumeType: volume.VolumeType,
-					})
-				}
-			}
-			if plan.Spec.NetMode == "existed" {
-				if infra.Subnets != nil {
-					if infra.Replica > 1 && infra.Subnets.FixIP != "" {
-						err = errors.NewBadRequest("replica more than 1,fixIp must be empty")
-						scope.Logger.Error(fmt.Errorf("replica more than 1,fixip must be empty"), "please check your plan machineSetReconcile infra subnets fixIp")
-						return err
 					}
-					if infra.Subnets.SubnetUUID == "" {
-						err = errors.NewBadRequest("subnet uuid is empty")
-						scope.Logger.Error(err, "please check your plan machineSetReconcile infra subnets uuid")
-						return err
-					} else {
-						openstackTemplate.Spec.Template.Spec.Ports = append(openstackTemplate.Spec.Template.Spec.Ports, clusteropenstack.PortOpts{
-							Network: &clusteropenstack.NetworkFilter{
-								ID: infra.Subnets.SubnetNetwork,
-							},
-							FixedIPs: []clusteropenstack.FixedIP{
-								{
-									Subnet: &clusteropenstack.SubnetFilter{
-										ID: infra.Subnets.SubnetUUID,
-									},
-									IPAddress: infra.Subnets.FixIP,
-								},
-							},
-						})
-					}
-
 				} else {
-					err = errors.NewBadRequest("subnet  is empty")
-					scope.Logger.Error(err, "please check your plan machineSetReconcile infra subnets")
-					return err
-
+					openstackTemplate.Spec.Template.Spec.CustomeVolumes = []*clusteropenstack.RootVolume{
+						{
+							Size:             volume.VolumeSize,
+							VolumeType:       volume.VolumeType,
+							AvailabilityZone: volume.AvailabilityZone,
+						},
+					}
 				}
-			} else {
-				// dont config subnet
-			}
 
-			if set.Role == "master" {
-				openstackTemplate.Spec.Template.Spec.ServerGroupID = masterGroup
-			} else {
-				openstackTemplate.Spec.Template.Spec.ServerGroupID = nodeGroup
+				if plan.Spec.NetMode == "existed" {
+					if infra.Subnets != nil {
+						if infra.Replica > 1 && infra.Subnets.FixIP != "" {
+							err = errors.NewBadRequest("replica more than 1,fixIp must be empty")
+							scope.Logger.Error(fmt.Errorf("replica more than 1,fixip must be empty"), "please check your plan machineSetReconcile infra subnets fixIp")
+							return err
+						}
+						if infra.Subnets.SubnetUUID == "" {
+							err = errors.NewBadRequest("subnet uuid is empty")
+							scope.Logger.Error(err, "please check your plan machineSetReconcile infra subnets uuid")
+							return err
+						} else {
+							openstackTemplate.Spec.Template.Spec.Ports = []clusteropenstack.PortOpts{
+								{
+									Network: &clusteropenstack.NetworkFilter{
+										ID: infra.Subnets.SubnetNetwork,
+									},
+									FixedIPs: []clusteropenstack.FixedIP{
+										{
+											Subnet: &clusteropenstack.SubnetFilter{
+												ID: infra.Subnets.SubnetUUID,
+											},
+											IPAddress: infra.Subnets.FixIP,
+										},
+									},
+								},
+							}
+						}
+					} else {
+						err = errors.NewBadRequest("subnet  is empty")
+						scope.Logger.Error(err, "please check your plan machineSetReconcile infra subnets")
+						return err
+
+					}
+				} else {
+					// dont config subnet
+				}
+
+				if set.Role == "master" {
+					openstackTemplate.Spec.Template.Spec.ServerGroupID = masterGroup
+				} else {
+					openstackTemplate.Spec.Template.Spec.ServerGroupID = nodeGroup
+				}
+				//TODO create openstacktemplate resource
+				err = client.Create(ctx, &openstackTemplate)
+				if err != nil {
+					return err
+				}
 			}
-			//TODO create openstacktemplate resource
-			err = client.Create(ctx, &openstackTemplate)
-			if err != nil {
-				return err
-			}
-			return nil
 		}
 		return err
-
 	}
 	return nil
 }
 
 func GetOrCreateCloudInitSecret(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile) error {
-	return getOrCreateCloudInitSecret(ctx, scope, client, plan, set)
+	return getOrCreateCloudInitSecret(ctx, client, plan, set)
 }
 
 // TODO get or create cloud init secret,one cloud init secret for one machineset
-func getOrCreateCloudInitSecret(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile) error {
+func getOrCreateCloudInitSecret(ctx context.Context, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile) error {
 	// get cloud init secret by name ,if not exist,create it
 	var cloudInitSecret corev1.Secret
 	secretName := fmt.Sprintf("%s-%s%s", plan.Spec.ClusterName, set.Name, CloudInitSecretSuffix)
@@ -425,7 +443,7 @@ func getOrCreateCloudInitSecret(ctx context.Context, scope *scope.Scope, client 
 			if err != nil {
 				return err
 			}
-			cloud, _, err := provider.GetCloudFromSecret(ctx, client, plan.Namespace, fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc"), plan.Spec.ClusterName)
+			cloud, _, err := capoprovider.GetCloudFromSecret(ctx, client, plan.Namespace, fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc"), plan.Spec.ClusterName)
 			if err != nil {
 				return err
 			}
@@ -516,34 +534,59 @@ func getOrCreateCloudInitSecret(ctx context.Context, scope *scope.Scope, client 
 }
 
 // TODO create a new machineset replicas==0,deletePolicy==Newest,one machineset for one plan.spec.machinesetsReconcile
-func createMachineset(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile, index int) error {
+func createMachineset(ctx context.Context, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile, index int) error {
 	infra := set.Infra[index]
-	var machineSet clusterapi.MachineSet
-	machineSet.Name = fmt.Sprintf("%s%s", plan.Spec.ClusterName, set.Role)
-	machineSet.Namespace = plan.Namespace
-	machineSet.Spec.ClusterName = plan.Spec.ClusterName
-	var re int32 = 0
-	machineSet.Spec.Replicas = &re
-	machineSet.Spec.DeletePolicy = "Newest"
-	machineSet.Spec.Selector.MatchLabels = make(map[string]string)
-	machineSet.Spec.Selector.MatchLabels["cluster.x-k8s.io/cluster-name"] = plan.Spec.ClusterName
-	if plan.Spec.UseFloatIP == true && set.Role == ecnsv1.MasterSetRole {
-		machineSet.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
-		machineSet.Spec.Template.ObjectMeta.Annotations["machinedeployment.clusters.x-k8s.io/fip"] = "enable"
+
+	var (
+		re                int32  = 0
+		cloud_secret_name string = fmt.Sprintf("%s-%s-cloudinit", plan.Spec.ClusterName, set.Name)
+		machineSet               = clusterapi.MachineSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s%s", plan.Spec.ClusterName, set.Role),
+				Namespace: plan.Namespace,
+			},
+			Spec: clusterapi.MachineSetSpec{
+				ClusterName:  plan.Spec.ClusterName,
+				Replicas:     &re,
+				DeletePolicy: "Newest",
+				Selector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"cluster.x-k8s.io/cluster-name": plan.Spec.ClusterName,
+					},
+				},
+				Template: clusterapi.MachineTemplateSpec{
+					ObjectMeta: clusterapi.ObjectMeta{
+						Labels: map[string]string{
+							"cluster.x-k8s.io/cluster-name": plan.Spec.ClusterName,
+						},
+					},
+					Spec: clusterapi.MachineSpec{
+						Bootstrap: clusterapi.Bootstrap{
+							DataSecretName: &cloud_secret_name,
+						},
+						ClusterName:   plan.Spec.ClusterName,
+						FailureDomain: &infra.AvailabilityZone,
+						InfrastructureRef: corev1.ObjectReference{
+							APIVersion: Clusteropenstackapi,
+							Kind:       Clusteropenstackkind,
+							Name:       fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
+						},
+						Version: &plan.Spec.K8sVersion,
+					},
+				},
+			},
+		}
+	)
+
+	if plan.Spec.UseFloatIP && set.Role == ecnsv1.MasterSetRole {
+		machineSet.Spec.Template.ObjectMeta.Annotations = map[string]string{
+			"machinedeployment.clusters.x-k8s.io/fip": "enable",
+		}
 	}
-	machineSet.Spec.Template.Labels = make(map[string]string)
-	machineSet.Spec.Template.Labels["cluster.x-k8s.io/cluster-name"] = plan.Spec.ClusterName
+
 	if set.Role == ecnsv1.MasterSetRole || set.Role == ecnsv1.Etcd {
 		machineSet.Spec.Template.Labels[ecnsv1.MachineControlPlaneLabelName] = "true"
 	}
-	cloud_secret_name := fmt.Sprintf("%s-%s-cloudinit", plan.Spec.ClusterName, set.Name)
-	machineSet.Spec.Template.Spec.Bootstrap.DataSecretName = &cloud_secret_name
-	machineSet.Spec.Template.Spec.ClusterName = plan.Spec.ClusterName
-	machineSet.Spec.Template.Spec.FailureDomain = &infra.AvailabilityZone
-	machineSet.Spec.Template.Spec.InfrastructureRef.APIVersion = Clusteropenstackapi
-	machineSet.Spec.Template.Spec.InfrastructureRef.Kind = Clusteropenstackkind
-	machineSet.Spec.Template.Spec.InfrastructureRef.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID)
-	machineSet.Spec.Template.Spec.Version = &plan.Spec.K8sVersion
 	err := client.Create(ctx, &machineSet)
 	if err != nil {
 		return err

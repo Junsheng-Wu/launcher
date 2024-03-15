@@ -243,8 +243,10 @@ type Infras struct {
 	Image string `json:"image"`
 	// Flavor is the flavor of machine
 	Flavor string `json:"flavor"`
-	// replica is the replica of machine
+	// Replica is the replica of machine
 	Replica int32 `json:"replica"`
+	// Metadata mapping. Allows you to create a map of key value pairs to add to the server instance.
+	ServerMetadata map[string]string `json:"serverMetadata,omitempty"`
 }
 
 type volume struct {

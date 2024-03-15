@@ -41,6 +41,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
 	"github.com/gophercloud/gophercloud/pagination"
+	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -63,7 +64,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 )
 
 const (
@@ -222,7 +222,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 	}
 	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
 
-
 	if plan.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
@@ -294,6 +293,7 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 
 	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanStartEvent, "Start plan")
 	scope.Logger.Info("Reconciling plan openstack resource")
+
 	// get or create application credential
 	err := syncAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
@@ -317,12 +317,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	//TODO  get or create KubeadmConfig ,no use
-	// err = syncCreateKubeadmConfig(ctx, r.Client, plan)
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
 
 	//TODO  get or create server groups,master one,work one
 	mastergroupID, nodegroupID, err := syncServerGroups(scope, plan)
@@ -960,6 +954,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 								Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix),
 							},
 							DeleteVolumeOnTermination: plan.Spec.DeleteVolumeOnTermination,
+							RootVolume:                &clusteropenstackapis.RootVolume{},
 						},
 					},
 					AllowAllInClusterTraffic: false,
@@ -999,11 +994,12 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				openstackCluster.Spec.Subnet.ID = MSet.Infra[0].Subnets.SubnetUUID
 			}
 
-			for index, volume := range MSet.Infra[0].Volumes {
+			for _, volume := range MSet.Infra[0].Volumes {
 				// bastion only set rootVolume because image use masterSet image
 				if volume.Index == 1 {
-					openstackCluster.Spec.Bastion.Instance.RootVolume.Size = MSet.Infra[0].Volumes[index].VolumeSize
-					openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = MSet.Infra[0].Volumes[index].VolumeType
+					openstackCluster.Spec.Bastion.Instance.RootVolume.Size = volume.VolumeSize
+					openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = volume.VolumeType
+					openstackCluster.Spec.Bastion.Instance.RootVolume.AvailabilityZone = volume.AvailabilityZone
 				}
 			}
 
@@ -1338,18 +1334,12 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	if err != nil {
 		return err
 	}
-
 	err = deleteAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
 		return err
 	}
 
-	err = deleteSeverGroup(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteAnsibleCluster(ctx, r.Client, scope, plan)
+	err = deleteSeverGroup(scope, plan)
 	if err != nil {
 		return err
 	}
@@ -1399,7 +1389,6 @@ func deleteClusterOperationSets(ctx context.Context, cli client.Client, plan *ec
 // 	return nil
 // }
 
-
 func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	if plan.Spec.LBEnable {
 		// cluster delete has delete lb
@@ -1441,7 +1430,7 @@ func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	return nil
 }
 
-func deleteSeverGroup(ctx context.Context, cli client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func deleteSeverGroup(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	op, err := openstack.NewComputeV2(scope.ProviderClient, gophercloud.EndpointOpts{
 		Region: scope.ProviderClientOpts.RegionName,
 	})
@@ -1590,25 +1579,6 @@ func deleteAppCre(ctx context.Context, scope *scope.Scope, client client.Client,
 	return nil
 }
 
-func deleteKubeadmConfig(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan) error {
-	kubeadmconfigte := &clusterkubeadm.KubeadmConfigTemplate{}
-	err := client.Get(ctx, types.NamespacedName{Name: plan.Spec.ClusterName, Namespace: plan.Namespace}, kubeadmconfigte)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			scope.Logger.Info("Cluster has already been deleted")
-			return nil
-		}
-	}
-
-	err = client.Delete(ctx, kubeadmconfigte)
-	if err != nil {
-		scope.Logger.Error(err, "Delete kubeadmin secert failed.")
-		return err
-	}
-
-	return nil
-}
-
 func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan) error {
 	secretName := fmt.Sprintf("%s%s", plan.Name, utils.SSHSecretSuffix)
 	//get secret by name secretName
@@ -1624,26 +1594,6 @@ func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.C
 	err = client.Delete(ctx, secret)
 	if err != nil {
 		scope.Logger.Error(err, "Delete kubeadmin secert failed.")
-		return err
-	}
-
-	return nil
-}
-
-func deleteAnsibleCluster(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	cl := &clusterv1alpha1.Cluster{}
-	err := client.Get(ctx, types.NamespacedName{Namespace: plan.Namespace, Name: plan.Spec.ClusterName}, cl)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			scope.Logger.Error(err, "ansible cluster has already been deleted")
-			return nil
-		}
-		return err
-	}
-
-	err = client.Delete(ctx, cl)
-	if err != nil {
-		scope.Logger.Error(err, "Delete cluster failed")
 		return err
 	}
 

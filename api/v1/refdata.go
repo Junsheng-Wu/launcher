@@ -1,5 +1,6 @@
 package v1
 
+// +k8s:deepcopy-gen=false
 type DataRef struct {
 	NameSpace string `json:"namespace"` // todo 小写
 	Name      string `json:"name"`

@@ -37,8 +37,6 @@ const (
 	// MachineSetLabelName is the machine set label name
 	MachineSetLabelName = "cluster.x-k8s.io/set-name"
 
-	AnsibleFinalizer = "ansible.ecns.easystack.com"
-
 	ClusterOperationSetFinalizer = "clusteroperationset.ecns.easystack.com"
 
 	// MachineControlPlaneLabelName is the label set on machines or related objects that are part of a control plane.
@@ -65,7 +63,8 @@ const (
 
 // VolumeTypeDefault set as VolumeType default value
 const (
-	VolumeTypeDefault = "hdd"
+	VolumeTypeDefault     = "hdd"
+	VolumeTypeDefaultSize = 40
 )
 
 // PlanSpec defines the desired state of Plan
@@ -140,17 +139,54 @@ type PlanSpec struct {
 	//Paused is the flag to pause the plan
 	Paused bool `json:"paused,omitempty"`
 
-	// AnsiblePlanAuto  decide to auto to run ansible plan
-	AnsiblePlanAuto bool `json:"ansible_plan_auto,omitempty"`
-
 	// UserInfo is the user of keystone auth
 	UserInfo User `json:"user,omitempty"`
 
-	// Execute ansible plan max retry times.
-	MaxRetryTime int `json:"maxRetryTime"`
-
 	// DeleteVolumeOnTermination is the flag to decide to delete volume on termination
 	DeleteVolumeOnTermination bool `json:"deleteVolumeOnTermination,omitempty"`
+
+	// NodesInfo are the node pools
+	HostConf *HostConf `json:"hostConf,omitempty"`
+
+	// HostConfName is the name of hostConf configMap
+	HostConfName string `json:"hostConfName,omitempty"`
+
+	// VarsConfName is the name of varsConf configMap
+	VarsConfName string `json:"varsConfName,omitempty"`
+}
+
+type HostConf struct {
+	// NodePools are the node pools,we need print the config
+	// like this:
+	//# cat /etc/ansible/hosts
+	NodePools []*AnsibleNode `json:"nodePools,omitempty"`
+	//Bastion
+	Bastion *AnsibleNode `json:"bastion"`
+	// Etcd is the etcd group
+	Etcd []string `json:"etcd,omitempty"`
+	// KubeMaster is the kube master group
+	KubeMaster []string `json:"kubeMaster,omitempty"`
+	// KubeNode is the kube node group
+	KubeNode []string `json:"kubeNode,omitempty"`
+	// KubeIngress is the kube ingress group
+	KubeIngress []string `json:"kubeIngress,omitempty"`
+	// KubePrometheus is the kube prometheus group
+	KubePrometheus []string `json:"kubePrometheus,omitempty"`
+	// KubeLog is the kube log group
+	KubeLog []string `json:"kubeLog,omitempty"`
+}
+
+type AnsibleNode struct {
+	// Name is the name of the node
+	Name string `json:"name,omitempty"`
+	// AnsibleHost is the ansible host
+	AnsibleHost string `json:"ansibleHost,omitempty"`
+	// AnsibleIP is the ansible ip
+	AnsibleIP string `json:"ansibleIP,omitempty"`
+	// MemoryReserve is the memory reserve(GB),default is -4,always < 0.
+	MemoryReserve int64 `json:"memoryReserve,omitempty"`
+	// AnsibleSSHPrivateKeyFile is the ansible ssh private key file
+	AnsibleSSHPrivateKeyFile string `json:"ansibleSSHPrivateKeyFile,omitempty"`
 }
 
 // User is the user of keystone auth
@@ -213,8 +249,10 @@ type Infras struct {
 	Image string `json:"image"`
 	// Flavor is the flavor of machine
 	Flavor string `json:"flavor"`
-	// replica is the replica of machine
+	// Replica is the replica of machine
 	Replica int32 `json:"replica"`
+	// Metadata mapping. Allows you to create a map of key value pairs to add to the server instance.
+	ServerMetadata map[string]string `json:"serverMetadata,omitempty"`
 }
 
 type volume struct {

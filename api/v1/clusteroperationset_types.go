@@ -23,7 +23,10 @@ import (
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-const KubeanAnnotation = "kubean.io/cluster"
+const (
+	KubeanAnnotation = "kubean.io/cluster"
+	KubeanLabel      = "kubean.io/cluster"
+)
 
 // ClusterOperationSetSpec defines the desired state of ClusterOperationSet
 type ClusterOperationSetSpec struct {

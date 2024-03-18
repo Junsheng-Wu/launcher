@@ -13,7 +13,7 @@ import (
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/pkg/cloudinit"
 	"easystack.com/plan/pkg/scope"
-	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
+	clusteropenstackapis "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	capoprovider "github.com/easystack/cluster-api-provider-openstack/pkg/cloud/services/provider"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -261,14 +261,14 @@ func checkOpenstackClusterReady(ctx context.Context, client client.Client, plan 
 	if cluster == nil {
 		return false, errNew.New(fmt.Sprintf("openstack cluster %s is nil,please check it", plan.Spec.ClusterName))
 	}
-	if cluster.Status.Ready && (cluster.Status.Bastion != nil && cluster.Status.Bastion.State == clusteropenstack.InstanceStateActive) {
+	if cluster.Status.Ready && (cluster.Status.Bastion != nil && cluster.Status.Bastion.State == clusteropenstackapis.InstanceStateActive) {
 		return true, nil
 	}
 	return false, nil
 }
 
-func GetOpenstackCluster(ctx context.Context, client client.Client, plan *ecnsv1.Plan) (*clusteropenstack.OpenStackCluster, error) {
-	var cluster clusteropenstack.OpenStackCluster
+func GetOpenstackCluster(ctx context.Context, client client.Client, plan *ecnsv1.Plan) (*clusteropenstackapis.OpenStackCluster, error) {
+	var cluster clusteropenstackapis.OpenStackCluster
 	err := client.Get(ctx, types.NamespacedName{
 		Namespace: plan.Namespace,
 		Name:      plan.Spec.ClusterName,
@@ -293,7 +293,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 
 	infra := set.Infra[index]
 	// get openstacktemplate by name ,if not exist,create it
-	var openstackTemplate clusteropenstack.OpenStackMachineTemplate
+	var openstackTemplate clusteropenstackapis.OpenStackMachineTemplate
 	// get openstacktemplate by filiter from cache
 	err := client.Get(ctx, types.NamespacedName{
 		Namespace: plan.Namespace,
@@ -303,7 +303,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 		if apierrors.IsNotFound(err) {
 			// create openstacktemplate
 			// add label to openstacktemplate with infra uid
-			openstackTemplate = clusteropenstack.OpenStackMachineTemplate{
+			openstackTemplate = clusteropenstackapis.OpenStackMachineTemplate{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						LabelTemplateInfra:    infra.UID,
@@ -312,31 +312,39 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 					Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
 					Namespace: plan.Namespace,
 				},
-				Spec: clusteropenstack.OpenStackMachineTemplateSpec{
-					Template: clusteropenstack.OpenStackMachineTemplateResource{
-						Spec: clusteropenstack.OpenStackMachineSpec{
+				Spec: clusteropenstackapis.OpenStackMachineTemplateSpec{
+					Template: clusteropenstackapis.OpenStackMachineTemplateResource{
+						Spec: clusteropenstackapis.OpenStackMachineSpec{
 							Flavor:     infra.Flavor,
 							Image:      infra.Image,
 							SSHKeyName: plan.Spec.SshKey,
 							CloudName:  plan.Spec.ClusterName,
-							IdentityRef: &clusteropenstack.OpenStackIdentityReference{
+							IdentityRef: &clusteropenstackapis.OpenStackIdentityReference{
 								Kind: "Secret",
 								Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, "admin-etc"),
 							},
 							DeleteVolumeOnTermination: plan.Spec.DeleteVolumeOnTermination,
+							RootVolume:                &clusteropenstackapis.RootVolume{},
+							ServerMetadata:            infra.ServerMetadata,
 						},
 					},
 				},
 			}
 
+			// berametal need reserve_instance_type=baremetal servermetadata
+			for metadatakey, metadatavalue := range infra.ServerMetadata {
+				openstackTemplate.Spec.Template.Spec.ServerMetadata[metadatakey] = metadatavalue
+			}
+
 			for _, volume := range infra.Volumes {
 				if volume.Index == 1 {
-					openstackTemplate.Spec.Template.Spec.RootVolume = &clusteropenstack.RootVolume{
-						Size:       volume.VolumeSize,
-						VolumeType: volume.VolumeType,
+					openstackTemplate.Spec.Template.Spec.RootVolume = &clusteropenstackapis.RootVolume{
+						Size:             volume.VolumeSize,
+						VolumeType:       volume.VolumeType,
+						AvailabilityZone: volume.AvailabilityZone,
 					}
 				} else {
-					openstackTemplate.Spec.Template.Spec.CustomeVolumes = []*clusteropenstack.RootVolume{
+					openstackTemplate.Spec.Template.Spec.CustomeVolumes = []*clusteropenstackapis.RootVolume{
 						{
 							Size:             volume.VolumeSize,
 							VolumeType:       volume.VolumeType,
@@ -357,14 +365,14 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 							scope.Logger.Error(err, "please check your plan machineSetReconcile infra subnets uuid")
 							return err
 						} else {
-							openstackTemplate.Spec.Template.Spec.Ports = []clusteropenstack.PortOpts{
+							openstackTemplate.Spec.Template.Spec.Ports = []clusteropenstackapis.PortOpts{
 								{
-									Network: &clusteropenstack.NetworkFilter{
+									Network: &clusteropenstackapis.NetworkFilter{
 										ID: infra.Subnets.SubnetNetwork,
 									},
-									FixedIPs: []clusteropenstack.FixedIP{
+									FixedIPs: []clusteropenstackapis.FixedIP{
 										{
-											Subnet: &clusteropenstack.SubnetFilter{
+											Subnet: &clusteropenstackapis.SubnetFilter{
 												ID: infra.Subnets.SubnetUUID,
 											},
 											IPAddress: infra.Subnets.FixIP,

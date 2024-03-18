@@ -41,6 +41,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
 	"github.com/gophercloud/gophercloud/pagination"
+	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -200,6 +201,27 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		Logger:             log,
 	}
 
+	err = r.syncHostConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
+
+	err = r.syncVarsConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
+
+	err = r.syncOpsCluster(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
+
 	if plan.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
@@ -271,6 +293,7 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 
 	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanStartEvent, "Start plan")
 	scope.Logger.Info("Reconciling plan openstack resource")
+
 	// get or create application credential
 	err := syncAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
@@ -294,12 +317,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	//TODO  get or create KubeadmConfig ,no use
-	// err = syncCreateKubeadmConfig(ctx, r.Client, plan)
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
 
 	//TODO  get or create server groups,master one,work one
 	mastergroupID, nodegroupID, err := syncServerGroups(scope, plan)
@@ -417,6 +434,90 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PlanReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, plan *ecnsv1.Plan) {
+	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(plan, ecnsv1.GroupVersion.WithKind("Plan"))}
+}
+
+func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	hostConf, err := utils.CreateHostConfConfigMap(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	r.SetOwnerReferences(&hostConf.ObjectMeta, plan)
+	cm := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: hostConf.Namespace, Name: hostConf.Name}, cm)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, hostConf); err != nil {
+				scope.Logger.Error(err, "Create host conf configMap failed")
+				return err
+			}
+			return nil
+		}
+	}
+	err = r.Client.Update(ctx, hostConf)
+	if err != nil {
+		scope.Logger.Error(err, "Update host conf configMap failed")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	varsConf, err := utils.CreateVarsConfConfigMap(ctx, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	r.SetOwnerReferences(&varsConf.ObjectMeta, plan)
+
+	cm := &corev1.ConfigMap{}
+	err = r.Client.Get(ctx, types.NamespacedName{Namespace: varsConf.Namespace, Name: varsConf.Name}, cm)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, varsConf); err != nil {
+				scope.Logger.Error(err, "Create vars conf configMap failed")
+				return err
+			}
+			return nil
+		}
+	}
+
+	err = r.Client.Update(ctx, varsConf)
+	if err != nil {
+		scope.Logger.Error(err, "Update vars conf configMap failed")
+		return err
+	}
+
+	return nil
+}
+
+func (r *PlanReconciler) syncOpsCluster(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+	cluster := utils.CreateOpsCluster(plan)
+	r.SetOwnerReferences(&cluster.ObjectMeta, plan)
+	cl := &clusterv1alpha1.Cluster{}
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cl)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err = r.Client.Create(ctx, cluster); err != nil {
+				scope.Logger.Error(err, "Create cluster failed")
+				return err
+			}
+			return nil
+		}
+	}
+
+	err = r.Client.Update(ctx, cluster)
+	if err != nil {
+		scope.Logger.Error(err, "Update cluster failed")
+		return err
+	}
+
+	return nil
 }
 
 // syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
@@ -874,6 +975,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 								Name: fmt.Sprintf("%s-%s", plan.Spec.ClusterName, ProjectAdminEtcSuffix),
 							},
 							DeleteVolumeOnTermination: plan.Spec.DeleteVolumeOnTermination,
+							RootVolume:                &clusteropenstackapis.RootVolume{},
 						},
 					},
 					AllowAllInClusterTraffic: false,
@@ -914,6 +1016,7 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 			}
 
 			openstackCluster.Spec.Bastion.Instance.RootVolume = &clusteropenstackapis.RootVolume{}
+			openstackCluster.Spec.Bastion.Instance.RootVolume.Size = ecnsv1.VolumeTypeDefaultSize
 			// get volumeType from plan
 			volumeType := getPlanVolumeType(plan)
 			if len(volumeType) > 0 {
@@ -1248,7 +1351,7 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 		return err
 	}
 
-	err = deleteKubean(ctx, r.Client, plan)
+	err = deleteClusterOperationSets(ctx, r.Client, plan)
 	if err != nil {
 		return err
 	}
@@ -1272,13 +1375,12 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	if err != nil {
 		return err
 	}
-
 	err = deleteAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
 		return err
 	}
 
-	err = deleteSeverGroup(ctx, r.Client, scope, plan)
+	err = deleteSeverGroup(scope, plan)
 	if err != nil {
 		return err
 	}
@@ -1286,7 +1388,7 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	return nil
 }
 
-func deleteKubean(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
+func deleteClusterOperationSets(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) error {
 	// get clusterOperationSet  obj to list all ClusterOperationSet in  cluster
 	sets := ecnsv1.ClusterOperationSetList{}
 	err := cli.List(ctx, &sets)
@@ -1316,6 +1418,17 @@ func deleteKubean(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) err
 	}
 	return nil
 }
+
+// func (r *PlanReconciler) cleanClusterOperationSet(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+// 	clusterOperationsetList := &ecnsv1.ClusterOperationSetList{}
+// 	listOpt := client.ListOptions{LabelSelector: labels.SelectorFromSet(labels.Set{ClusterLabel: plan.Spec.ClusterName})}
+// 	err := r.Client.List(ctx, clusterOperationsetList, &listOpt)
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	return nil
+// }
 
 func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	if plan.Spec.LBEnable {
@@ -1358,7 +1471,7 @@ func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	return nil
 }
 
-func deleteSeverGroup(ctx context.Context, cli client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func deleteSeverGroup(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	op, err := openstack.NewComputeV2(scope.ProviderClient, gophercloud.EndpointOpts{
 		Region: scope.ProviderClientOpts.RegionName,
 	})
@@ -1507,25 +1620,6 @@ func deleteAppCre(ctx context.Context, scope *scope.Scope, client client.Client,
 	return nil
 }
 
-func deleteKubeadmConfig(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan) error {
-	kubeadmconfigte := &clusterkubeadm.KubeadmConfigTemplate{}
-	err := client.Get(ctx, types.NamespacedName{Name: plan.Spec.ClusterName, Namespace: plan.Namespace}, kubeadmconfigte)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			scope.Logger.Info("Cluster has already been deleted")
-			return nil
-		}
-	}
-
-	err = client.Delete(ctx, kubeadmconfigte)
-	if err != nil {
-		scope.Logger.Error(err, "Delete kubeadmin secert failed.")
-		return err
-	}
-
-	return nil
-}
-
 func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.Client, plan *ecnsv1.Plan) error {
 	secretName := fmt.Sprintf("%s%s", plan.Name, utils.SSHSecretSuffix)
 	//get secret by name secretName
@@ -1545,25 +1639,4 @@ func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.C
 	}
 
 	return nil
-}
-
-func deleteAnsiblePlan(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	ansiblePlanName := fmt.Sprintf("%s%s", plan.Name, utils.SSHSecretSuffix)
-	ansiblePlan := &ecnsv1.AnsiblePlan{}
-	err := client.Get(ctx, types.NamespacedName{Name: ansiblePlanName, Namespace: plan.Namespace}, ansiblePlan)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			scope.Logger.Info("ansible plan has already been deleted")
-			return nil
-		}
-	}
-
-	err = client.Delete(ctx, ansiblePlan)
-	if err != nil {
-		scope.Logger.Error(err, "Delete ansible plan failed")
-		return err
-	}
-
-	return nil
-
 }

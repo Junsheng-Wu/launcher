@@ -7,12 +7,10 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"os"
 	"strings"
 
 	ecnsv1 "easystack.com/plan/api/v1"
 
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -79,61 +77,61 @@ func GetOrCreateSSHKeySecret(ctx context.Context, client client.Client, plan *ec
 	return pub, pri, nil
 }
 
-func GetSecretByName(ctx context.Context, client client.Client, secretName string, namespace string) (string, string, error) {
-	secret := &corev1.Secret{}
-	err := client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, secret)
-	if err != nil {
-		return "", "", err
-	}
-	pub := string(secret.Data["public_key"])
-	pri := string(secret.Data["private_key"])
-	if pri == "" {
-		return "", "", errors.New("private key is empty,please check it")
-	}
-	return pub, pri, nil
-}
+// func GetSecretByName(ctx context.Context, client client.Client, secretName string, namespace string) (string, string, error) {
+// 	secret := &corev1.Secret{}
+// 	err := client.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, secret)
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	pub := string(secret.Data["public_key"])
+// 	pri := string(secret.Data["private_key"])
+// 	if pri == "" {
+// 		return "", "", errors.New("private key is empty,please check it")
+// 	}
+// 	return pub, pri, nil
+// }
 
-// GetOrCreateSSHkeyFile  create private key file
-func GetOrCreateSSHkeyFile(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
-	path := fmt.Sprintf("/root/.ssh/id_rsa_%s", ansible.Spec.ClusterName)
-	// judge if path of file exists
-	if FileExist(path) {
-		// delete file
-		err := os.RemoveAll(path)
-		if err != nil {
-			return err
-		}
-	}
-	// get public key and private key
-	_, pri, err := GetSecretByName(context.Background(), cli, ansible.Spec.SSHSecret, ansible.Namespace)
-	if err != nil {
-		return err
-	}
+// // GetOrCreateSSHkeyFile  create private key file
+// func GetOrCreateSSHkeyFile(ctx context.Context, cli client.Client, ansible *ecnsv1.AnsiblePlan) error {
+// 	path := fmt.Sprintf("/root/.ssh/id_rsa_%s", ansible.Spec.ClusterName)
+// 	// judge if path of file exists
+// 	if FileExist(path) {
+// 		// delete file
+// 		err := os.RemoveAll(path)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	// get public key and private key
+// 	_, pri, err := GetSecretByName(context.Background(), cli, ansible.Spec.SSHSecret, ansible.Namespace)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// create file
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
+// 	// create file
+// 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	defer file.Close()
+// 	defer file.Close()
 
-	_, err = file.Write([]byte(pri))
-	if err != nil {
-		return err
-	}
+// 	_, err = file.Write([]byte(pri))
+// 	if err != nil {
+// 		return err
+// 	}
 
-	for i, pool := range ansible.Spec.Install.NodePools {
-		if pool.AnsibleSSHPrivateKeyFile == "" {
-			ansible.Spec.Install.NodePools[i].AnsibleSSHPrivateKeyFile = path
-		}
-	}
-	ansible.Spec.Install.OtherAnsibleOpts["ansible_user"] = "root"
-	ansible.Spec.Install.OtherAnsibleOpts["ansible_ssh_private_key_file"] = path
-	return nil
-}
+// 	for i, pool := range ansible.Spec.Install.NodePools {
+// 		if pool.AnsibleSSHPrivateKeyFile == "" {
+// 			ansible.Spec.Install.NodePools[i].AnsibleSSHPrivateKeyFile = path
+// 		}
+// 	}
+// 	ansible.Spec.Install.OtherAnsibleOpts["ansible_user"] = "root"
+// 	ansible.Spec.Install.OtherAnsibleOpts["ansible_ssh_private_key_file"] = path
+// 	return nil
+// }
 
-func FileExist(path string) bool {
-	_, err := os.Lstat(path)
-	return !os.IsNotExist(err)
-}
+// func FileExist(path string) bool {
+// 	_, err := os.Lstat(path)
+// 	return !os.IsNotExist(err)
+// }

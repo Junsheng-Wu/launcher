@@ -7,16 +7,16 @@ metadata:
     app.kubernetes.io/part-of: easystack-eks-op
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: easystack-eks-op
-  name: plan-mj-test
+  name: plan-of-sloth
   namespace: sloth
 spec:
   mode: "new"
   k8sVersion: "v1.26.4-es"
   support_python3: false
-  lb_enable: true
-  cluster_name: "test3"
+  lb_enable: false
+  cluster_name: "slothcluster"
   ssh_key: "sloth"
-  use_float_ip: true
+  use_float_ip: false
   node_cidr: "10.6.0.0/24"
   external_network_id: "410a63a3-b55e-41c6-8d67-e669b58355e3"
   other_ansible_opts:
@@ -32,7 +32,7 @@ spec:
     - "master"
     - "ingress"
   machine_sets:
-    - name: "test-master"
+    - name: "ironic-master"
       role: "master"
       number: 1
       infras:
@@ -41,81 +41,45 @@ spec:
           volumes:
             - volume_type: "hdd"
               volume_size: 150
+              availability_zone: "default-az"
               index: 1
-              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 10
+              availability_zone: "default-az"
               index: 2
-              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 5
+              availability_zone: "default-az"
               index: 3
-              availability_zone: default-az
-          image: "centos-qga"
+          image: "loadbalancer-image-240313-x86_64"
           flavor: "8C-8G"
           replica: 1
-        - uid: "7d3d"
-          availability_zone: "default-az"
-          volumes:
-            - volume_type: "hdd"
-              volume_size: 150
-              index: 1
-              availability_zone: default-az
-            - volume_type: "hdd"
-              volume_size: 5
-              index: 2
-              availability_zone: default-az
-            - volume_type: "hdd"
-              volume_size: 5
-              index: 3
-              availability_zone: default-az
-          image: "centos-qga"
-          flavor: "8C-8G"
-          replica: 0
-    - name: "test-node"
-      number: 0
+          serverMetadata:
+            "reserve_instance_type": "normal"
+    - name: "sloth-node"
+      number: 1
       role: "node"
       infras:
         - uid: "bb85"
-          availability_zone: "default-az"
+          availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
           volumes:
             - volume_type: "hdd"
-              volume_size: 150
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 1
-              availability_zone: default-az
             - volume_type: "hdd"
-              volume_size: 10
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 2
-              availability_zone: default-az
             - volume_type: "hdd"
-              volume_size: 5
+              volume_size: 0
+              availability_zone: "default-az:ironic.compute.domain.tld.2:5b0118c4-0aa4-4c96-9919-e6beb4e886f2"
               index: 3
-              availability_zone: default-az
-          image: "centos-qga"
-          flavor: "8C-8G"
-          replica: 0
-    - name: "test-ingress"
-      number: 1
-      role: "ingress"
-      infras:
-        - uid: "bb86"
-          availability_zone: "default-az"
-          volumes:
-            - volume_type: "hdd"
-              volume_size: 150
-              index: 1
-              availability_zone: default-az
-            - volume_type: "hdd"
-              volume_size: 10
-              index: 2
-              availability_zone: default-az
-            - volume_type: "hdd"
-              volume_size: 5
-              index: 3
-              availability_zone: default-az
-          image: "centos-qga"
-          flavor: "8C-8G"
+          image: "rocky93"
+          flavor: "1C-1G"
           replica: 1
+          serverMetadata:
+            "reserve_instance_type": "baremetal"
   monitor:
     pvc_type: "cinder"
     pvc_cap: "10"
@@ -128,7 +92,7 @@ spec:
   deleteVolumeOnTermination: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABl96vEAPjEWG22PGMv29KWX9bYqv1Rnw0owPFQ-NuUUwkNPuFIeM6iGR2uGFxg7gj8PQo6FTX183le_1J1T0jrAymz4UAfDjLtQikAtJsrv3jkQfviYppUQtFxS2hNpm7GsRm9Xf4226AllW2DkdkucN3maoEpLSrpteh6tquOdbrV8d0"
+    token: "gAAAAABl9BFjDwHYsGguy4RpePaa9nhGQ-Uf8apN90Xkedq3mdoUdHIYvokPmaLIjZzj-bZkfRVSU6WMvTrFau8MvmcutauQO8LToRPVTE-19g_vFBUOAu4rs6Km0HWiCzK2UqfCuNPapi3SoaHZgLMLmLMGQbeDwIqjGFjrGWHNJgg5h8R6ED0"
     region: "RegionOne"
 
 

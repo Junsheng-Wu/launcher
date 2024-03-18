@@ -322,6 +322,17 @@ spec:
               user:
                 description: UserInfo is the user of keystone auth
                 properties:
+                  AuthSecretRef:
+                    description: secretRef is the secret of keystone appCre
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   auth_url:
                     description: AuthUrl is the auth url of keystone
                     type: string
@@ -332,6 +343,7 @@ spec:
                     description: Token is the token of keystone,expired time is 6h
                     type: string
                 required:
+                - AuthSecretRef
                 - auth_url
                 - region
                 - token

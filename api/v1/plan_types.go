@@ -201,6 +201,8 @@ type User struct {
 	Token string `json:"token"`
 	// Region is the region of keystone
 	Region string `json:"region"`
+	// secretRef is the secret of keystone appCre
+	AuthSecretRef *SecretRef `json:"AuthSecretRef"`
 }
 
 // MonitorConfig is the monitor other config

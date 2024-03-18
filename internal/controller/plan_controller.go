@@ -189,7 +189,7 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		return ctrl.Result{}, err
 	}
 
-	osProviderClient, clientOpts, projectID, userID, err := provider.NewClientFromPlan(ctx, plan)
+	osProviderClient, clientOpts, projectID, userID, err := provider.NewClientFromPlan(ctx, r.Client, plan)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -842,6 +842,17 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		}
 	}
 
+	// include cpp cre secret by plan
+	if plan.Spec.UserInfo.AuthSecretRef.IsEmpty() {
+		plan.Spec.UserInfo.AuthSecretRef = &ecnsv1.SecretRef{
+			NameSpace: plan.Namespace,
+			Name:      secretName,
+		}
+		if err = cli.Update(ctx, plan); err != nil {
+			return err
+		}
+		return nil
+	}
 	return nil
 }
 

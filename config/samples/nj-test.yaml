@@ -18,6 +18,7 @@ spec:
   ssh_key: "sloth"
   use_float_ip: false
   node_cidr: "10.6.0.0/24"
+  external_network_id: "410a63a3-b55e-41c6-8d67-e669b58355e3"
   other_ansible_opts:
     "cloud_master_vip": "172.46.0.2"
     "registry_ip": "172.46.0.73"
@@ -27,8 +28,9 @@ spec:
   need_keep_alive:
     - "master"
     - "ingress"
-    - "ingress1"
-  need_load_balancer: []
+  need_load_balancer:
+    - "master"
+    - "ingress"
   machine_sets:
     - name: "ironic-master"
       role: "master"

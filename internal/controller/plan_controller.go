@@ -189,7 +189,7 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		return ctrl.Result{}, err
 	}
 
-	osProviderClient, clientOpts, projectID, userID, err := provider.NewClientFromPlan(ctx, plan)
+	osProviderClient, clientOpts, projectID, userID, err := provider.NewClientFromPlan(ctx, r.Client, plan)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -351,6 +351,7 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 
 	plan.Status.InfraMachine = make(map[string]ecnsv1.InfraMachine)
+	plan.Status.PlanLoadBalancer = make(map[string]ecnsv1.LoadBalancer)
 	// get or create HA port if needed
 	if !plan.Spec.LBEnable {
 		for _, set := range plan.Spec.MachineSets {
@@ -362,7 +363,6 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 			}
 		}
 	} else {
-		plan.Status.PlanLoadBalancer = nil
 		for _, set := range plan.Spec.MachineSets {
 			if SetNeedLoadBalancer(set.Role, plan.Spec.NeedLoadBalancer) {
 				err = syncCreateLoadBalancer(ctx, scope, r.Client, plan, set.Role)
@@ -561,8 +561,29 @@ func syncMember(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 }
 
 func syncCreateLoadBalancer(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, setRole string) error {
-	// master lb not need create loadBalancer by plan operator
+	// master lb create loadBalancer by cluster-api-openstack operator
 	if setRole == ecnsv1.MasterSetRole {
+		// get master role lb information from openstackcluster cr
+		//	openStackCluster.Status.Network.APIServerLoadBalancer = &infrav1.LoadBalancer{
+		//		Name:         lb.Name,
+		//		ID:           lb.ID,
+		//		InternalIP:   lb.VipAddress,
+		//		IP:           lbFloatingIP,
+		//		AllowedCIDRs: allowedCIDRs,
+		//	}
+		cluster, err := utils.GetOpenstackCluster(ctx, cli, plan)
+		if err != nil {
+			return err
+		}
+		if cluster.Status.Network.APIServerLoadBalancer == nil {
+			return errors.New("openstack cluster loadBalancer is nil,not except")
+		}
+		plan.Status.PlanLoadBalancer[setRole] = ecnsv1.LoadBalancer{
+			Name:       cluster.Status.Network.APIServerLoadBalancer.Name,
+			ID:         cluster.Status.Network.APIServerLoadBalancer.ID,
+			IP:         cluster.Status.Network.APIServerLoadBalancer.IP,
+			InternalIP: cluster.Status.Network.APIServerLoadBalancer.InternalIP,
+		}
 		return nil
 	}
 	loadBalancerService, err := loadbalancer.NewService(scope)
@@ -821,6 +842,17 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		}
 	}
 
+	// include cpp cre secret by plan
+	if plan.Spec.UserInfo.AuthSecretRef.IsEmpty() {
+		plan.Spec.UserInfo.AuthSecretRef = &ecnsv1.SecretRef{
+			NameSpace: plan.Namespace,
+			Name:      secretName,
+		}
+		if err = cli.Update(ctx, plan); err != nil {
+			return err
+		}
+		return nil
+	}
 	return nil
 }
 
@@ -994,13 +1026,17 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 				openstackCluster.Spec.Subnet.ID = MSet.Infra[0].Subnets.SubnetUUID
 			}
 
-			for _, volume := range MSet.Infra[0].Volumes {
-				// bastion only set rootVolume because image use masterSet image
-				if volume.Index == 1 {
-					openstackCluster.Spec.Bastion.Instance.RootVolume.Size = volume.VolumeSize
-					openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = volume.VolumeType
-					openstackCluster.Spec.Bastion.Instance.RootVolume.AvailabilityZone = volume.AvailabilityZone
+			openstackCluster.Spec.Bastion.Instance.RootVolume = &clusteropenstackapis.RootVolume{}
+			openstackCluster.Spec.Bastion.Instance.RootVolume.Size = ecnsv1.VolumeTypeDefaultSize
+			// get volumeType from plan
+			volumeType := getPlanVolumeType(plan)
+			if len(volumeType) > 0 {
+				for vKey, _ := range volumeType {
+					openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = vKey
+					break
 				}
+			} else {
+				openstackCluster.Spec.Bastion.Instance.RootVolume.VolumeType = ecnsv1.VolumeTypeDefault
 			}
 
 			if plan.Spec.NetMode == ecnsv1.NetWorkExist {
@@ -1037,6 +1073,22 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 	}
 	return nil
 
+}
+
+func getPlanVolumeType(plan *ecnsv1.Plan) map[string]bool {
+	var volumeTYpe = make(map[string]bool, 5)
+	for _, set := range plan.Spec.MachineSets {
+		if set.Role == ecnsv1.MasterSetRole {
+			for _, infraConfig := range set.Infra {
+				for _, volume := range infraConfig.Volumes {
+					if volume != nil {
+						volumeTYpe[volume.VolumeType] = true
+					}
+				}
+			}
+		}
+	}
+	return volumeTYpe
 }
 
 func isFusionArchitecture(sets []*ecnsv1.MachineSetReconcile) bool {

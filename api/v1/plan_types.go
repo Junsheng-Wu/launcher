@@ -61,6 +61,12 @@ const (
 	NetWorkNew   = "new"
 )
 
+// VolumeTypeDefault set as VolumeType default value
+const (
+	VolumeTypeDefault     = "hdd"
+	VolumeTypeDefaultSize = 40
+)
+
 // PlanSpec defines the desired state of Plan
 type PlanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -183,11 +189,11 @@ type AnsibleNode struct {
 	AnsibleSSHPrivateKeyFile string `json:"ansibleSSHPrivateKeyFile,omitempty"`
 }
 
-
 // User is the user of keystone auth
 // include AuthUrl
 // include Token
 // include Region
+
 type User struct {
 	// AuthUrl is the auth url of keystone
 	AuthUrl string `json:"auth_url"`
@@ -195,6 +201,8 @@ type User struct {
 	Token string `json:"token"`
 	// Region is the region of keystone
 	Region string `json:"region"`
+	// secretRef is the secret of keystone appCre
+	AuthSecretRef *SecretRef `json:"AuthSecretRef"`
 }
 
 // MonitorConfig is the monitor other config
@@ -283,7 +291,7 @@ type PlanStatus struct {
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
 	InfraMachine map[string]InfraMachine `json:"infra_machine,omitempty"`
 	// PlanLoadBalancer is the list of load balancer of plan
-	PlanLoadBalancer []*LoadBalancer `json:"planLoadBalancer,omitempty"`
+	PlanLoadBalancer map[string]LoadBalancer `json:"planLoadBalancer,omitempty"`
 	// Bastion is the bastion of plan
 	Bastion *clusteropenstack.Instance `json:"bastion,omitempty"`
 }

@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"os"
 	goruntime "runtime"
 
@@ -25,6 +26,7 @@ import (
 	"easystack.com/plan/internal/controller"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusteroperationv1alpha1 "github.com/kubean-io/kubean-api/apis/clusteroperation/v1alpha1"
+
 	clusterapi "sigs.k8s.io/cluster-api/api/v1beta1"
 	kubeadm "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	cc "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -55,6 +57,7 @@ func init() {
 	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(kubeadm.AddToScheme(scheme))
 	utilruntime.Must(clusteroperationv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(kubeancluster1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

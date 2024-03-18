@@ -19,6 +19,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ecnsv1 "easystack.com/plan/api/v1"
 	capoprovider "github.com/easystack/cluster-api-provider-openstack/pkg/cloud/services/provider"
@@ -28,9 +29,17 @@ import (
 )
 
 // NewClientFromPlan token Auth form plan.spec.User get Client
-func NewClientFromPlan(ctx context.Context, plan *ecnsv1.Plan) (*gophercloud.ProviderClient, *clientconfig.ClientOpts, string, string, error) {
-	cloud := getCloudFromPlan(plan)
-	return NewClientWithUserID(cloud, nil)
+func NewClientFromPlan(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) (*gophercloud.ProviderClient, *clientconfig.ClientOpts, string, string, error) {
+	if !plan.Spec.UserInfo.AuthSecretRef.IsEmpty() {
+		cloud, _, err := capoprovider.GetCloudFromSecret(ctx, cli, plan.Spec.UserInfo.AuthSecretRef.NameSpace, plan.Spec.UserInfo.AuthSecretRef.Name, plan.Spec.ClusterName)
+		if err != nil {
+			return nil, nil, "", "", err
+		}
+		return NewClientWithUserID(cloud, nil)
+	} else {
+		cloud := getCloudFromPlan(plan)
+		return NewClientWithUserID(cloud, nil)
+	}
 }
 
 func NewClientWithUserID(cloud capoprovider.NewCloud, caCert []byte) (*gophercloud.ProviderClient, *clientconfig.ClientOpts, string, string, error) {

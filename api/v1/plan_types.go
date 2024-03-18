@@ -63,6 +63,11 @@ const (
 	NetWorkNew   = "new"
 )
 
+// VolumeTypeDefault set as VolumeType default value
+const (
+	VolumeTypeDefault = "hdd"
+)
+
 // PlanSpec defines the desired state of Plan
 type PlanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -152,6 +157,7 @@ type PlanSpec struct {
 // include AuthUrl
 // include Token
 // include Region
+
 type User struct {
 	// AuthUrl is the auth url of keystone
 	AuthUrl string `json:"auth_url"`
@@ -245,7 +251,7 @@ type PlanStatus struct {
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
 	InfraMachine map[string]InfraMachine `json:"infra_machine,omitempty"`
 	// PlanLoadBalancer is the list of load balancer of plan
-	PlanLoadBalancer []*LoadBalancer `json:"planLoadBalancer,omitempty"`
+	PlanLoadBalancer map[string]LoadBalancer `json:"planLoadBalancer,omitempty"`
 	// Bastion is the bastion of plan
 	Bastion *clusteropenstack.Instance `json:"bastion,omitempty"`
 }

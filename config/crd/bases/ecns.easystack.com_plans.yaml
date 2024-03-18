@@ -638,8 +638,7 @@ spec:
                 description: Phase is the plan phase
                 type: object
               planLoadBalancer:
-                description: PlanLoadBalancer is the list of load balancer of plan
-                items:
+                additionalProperties:
                   description: LoadBalancer represents basic information about the
                     associated OpenStack LoadBalancer.
                   properties:
@@ -661,7 +660,8 @@ spec:
                   - ip
                   - name
                   type: object
-                type: array
+                description: PlanLoadBalancer is the list of load balancer of plan
+                type: object
               server_group_id:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying

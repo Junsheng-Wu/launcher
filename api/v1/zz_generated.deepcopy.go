@@ -706,13 +706,9 @@ func (in *PlanStatus) DeepCopyInto(out *PlanStatus) {
 	}
 	if in.PlanLoadBalancer != nil {
 		in, out := &in.PlanLoadBalancer, &out.PlanLoadBalancer
-		*out = make([]*LoadBalancer, len(*in))
-		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(LoadBalancer)
-				(*in).DeepCopyInto(*out)
-			}
+		*out = make(map[string]LoadBalancer, len(*in))
+		for key, val := range *in {
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	if in.Bastion != nil {

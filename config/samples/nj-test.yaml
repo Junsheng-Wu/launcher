@@ -13,11 +13,12 @@ spec:
   mode: "new"
   k8sVersion: "v1.26.4-es"
   support_python3: false
-  lb_enable: false
+  lb_enable: true
   cluster_name: "test3"
-  ssh_key: "zhouya"
-  use_float_ip: false
+  ssh_key: "sloth"
+  use_float_ip: true
   node_cidr: "10.6.0.0/24"
+  external_network_id: "410a63a3-b55e-41c6-8d67-e669b58355e3"
   other_ansible_opts:
     "cloud_master_vip": "172.46.0.2"
     "registry_ip": "172.46.0.73"
@@ -27,12 +28,13 @@ spec:
   need_keep_alive:
     - "master"
     - "ingress"
-    - "ingress1"
-  need_load_balancer: []
+  need_load_balancer:
+    - "master"
+    - "ingress"
   machine_sets:
     - name: "test-master"
       role: "master"
-      number: 2
+      number: 1
       infras:
         - uid: "7d2d"
           availability_zone: "default-az"
@@ -40,28 +42,34 @@ spec:
             - volume_type: "hdd"
               volume_size: 150
               index: 1
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 10
               index: 2
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 5
               index: 3
-          image: "eks-kylin-x86_64"
+              availability_zone: default-az
+          image: "centos-qga"
           flavor: "8C-8G"
-          replica: 2
+          replica: 1
         - uid: "7d3d"
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
               volume_size: 150
               index: 1
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 5
               index: 2
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 5
               index: 3
-          image: "eks-kylin-x86_64"
+              availability_zone: default-az
+          image: "centos-qga"
           flavor: "8C-8G"
           replica: 0
     - name: "test-node"
@@ -74,15 +82,40 @@ spec:
             - volume_type: "hdd"
               volume_size: 150
               index: 1
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 10
               index: 2
+              availability_zone: default-az
             - volume_type: "hdd"
               volume_size: 5
               index: 3
-          image: "eks-kylin-x86_64"
+              availability_zone: default-az
+          image: "centos-qga"
           flavor: "8C-8G"
           replica: 0
+    - name: "test-ingress"
+      number: 1
+      role: "ingress"
+      infras:
+        - uid: "bb86"
+          availability_zone: "default-az"
+          volumes:
+            - volume_type: "hdd"
+              volume_size: 150
+              index: 1
+              availability_zone: default-az
+            - volume_type: "hdd"
+              volume_size: 10
+              index: 2
+              availability_zone: default-az
+            - volume_type: "hdd"
+              volume_size: 5
+              index: 3
+              availability_zone: default-az
+          image: "centos-qga"
+          flavor: "8C-8G"
+          replica: 1
   monitor:
     pvc_type: "cinder"
     pvc_cap: "10"
@@ -95,7 +128,7 @@ spec:
   deleteVolumeOnTermination: true
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
-    token: "gAAAAABl6qn_NtTmpvDBJro_ZpdQL5UK9TFXnSU8oQ96tnCiMoD7zoauZZzeg_YUQgFEZ56PsLrGsWJCEaxn-gAUNQH7tXGs411GPlQqxMNLuGljtuvANtefJWwKk3vAPKPtW-LBDip7wWnYKWr38HqA5VOsJjEt282CUt5PTC0akpLOXPj_Wzs"
+    token: "gAAAAABl96vEAPjEWG22PGMv29KWX9bYqv1Rnw0owPFQ-NuUUwkNPuFIeM6iGR2uGFxg7gj8PQo6FTX183le_1J1T0jrAymz4UAfDjLtQikAtJsrv3jkQfviYppUQtFxS2hNpm7GsRm9Xf4226AllW2DkdkucN3maoEpLSrpteh6tquOdbrV8d0"
     region: "RegionOne"
 
 

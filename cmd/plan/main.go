@@ -8,6 +8,7 @@ import (
 	ecnsv1 "easystack.com/plan/api/v1"
 	"easystack.com/plan/internal/controller"
 	clusteropenstack "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
+	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -34,6 +35,7 @@ func init() {
 	utilruntime.Must(clusteropenstack.AddToScheme(scheme))
 	utilruntime.Must(clusterapi.AddToScheme(scheme))
 	utilruntime.Must(kubeadm.AddToScheme(scheme))
+	utilruntime.Must(kubeancluster1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

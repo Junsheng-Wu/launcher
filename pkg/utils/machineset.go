@@ -254,18 +254,29 @@ func PatchMachineSet(ctx context.Context, client client.Client, cur, mod *cluste
 
 // TODO check openstack cluster ready,one openstack cluster for one plan
 func checkOpenstackClusterReady(ctx context.Context, client client.Client, plan *ecnsv1.Plan) (bool, error) {
+	cluster, err := GetOpenstackCluster(ctx, client, plan)
+	if err != nil {
+		return false, err
+	}
+	if cluster == nil {
+		return false, errNew.New(fmt.Sprintf("openstack cluster %s is nil,please check it", plan.Spec.ClusterName))
+	}
+	if cluster.Status.Ready && (cluster.Status.Bastion != nil && cluster.Status.Bastion.State == clusteropenstack.InstanceStateActive) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func GetOpenstackCluster(ctx context.Context, client client.Client, plan *ecnsv1.Plan) (*clusteropenstack.OpenStackCluster, error) {
 	var cluster clusteropenstack.OpenStackCluster
 	err := client.Get(ctx, types.NamespacedName{
 		Namespace: plan.Namespace,
 		Name:      plan.Spec.ClusterName,
 	}, &cluster)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	if cluster.Status.Ready && (cluster.Status.Bastion != nil && cluster.Status.Bastion.State == clusteropenstack.InstanceStateActive) {
-		return true, nil
-	}
-	return false, nil
+	return &cluster, nil
 }
 
 func CheckOpenstackClusterReady(ctx context.Context, client client.Client, plan *ecnsv1.Plan) (bool, error) {

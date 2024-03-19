@@ -153,6 +153,8 @@ type PlanSpec struct {
 
 	// VarsConfName is the name of varsConf configMap
 	VarsConfName string `json:"varsConfName,omitempty"`
+
+	MachineExist bool `json:"machineExist,omitempty"`
 }
 
 type HostConf struct {
@@ -174,6 +176,18 @@ type HostConf struct {
 	KubePrometheus []string `json:"kubePrometheus,omitempty"`
 	// KubeLog is the kube log group
 	KubeLog []string `json:"kubeLog,omitempty"`
+	// NvidiaAccelerator is the nvidia accelerator group
+	NvidiaAccelerator []string `json:"nvidiaAccelerator,omitempty"`
+	// HygonAccelerator is the hygon accelerator group
+	HygonAccelerator []string `json:"hygonAccelerator,omitempty"`
+	// AscendAccelerator is the ascend accelerator group
+	AscendAccelerator []string `json:"ascendAccelerator,omitempty"`
+	// Esm is the esm group
+	Esm        []string `json:"esm,omitempty"`
+	// EsmIngress is the esm ingress group
+	EsmIngress []string `json:"esmIngress,omitempty"`
+	// EsmEgress is the esm egress group
+	EsmEgress  []string `json:"esmEgress,omitempty"`
 }
 
 type AnsibleNode struct {

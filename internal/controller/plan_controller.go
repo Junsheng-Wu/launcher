@@ -37,10 +37,12 @@ import (
 	"easystack.com/plan/pkg/utils"
 	clusteropenstackapis "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusteropenstackerrors "github.com/easystack/cluster-api-provider-openstack/pkg/utils/errors"
+	"github.com/go-logr/logr"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
 	"github.com/gophercloud/gophercloud/pagination"
+	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	kubeancluster1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -63,7 +65,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	clusterv1alpha1 "github.com/kubean-io/kubean-api/apis/cluster/v1alpha1"
 )
 
 const (
@@ -138,7 +139,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		log      = log.FromContext(ctx)
 	)
 	// Fetch the OpenStackMachine instance.
-
 	plan := &ecnsv1.Plan{}
 	err := r.Client.Get(ctx, req.NamespacedName, plan)
 	if err != nil {
@@ -184,10 +184,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 			}
 		}
 	}
-	patchHelper, err := patch.NewHelper(plan, r.Client)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	osProviderClient, clientOpts, projectID, userID, err := provider.NewClientFromPlan(ctx, plan)
 	if err != nil {
@@ -200,28 +196,10 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		UserID:             userID,
 		Logger:             log,
 	}
-
-	err = r.syncHostConf(ctx, scope, plan)
+	patchHelper, err := patch.NewHelper(plan, r.Client)
 	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+		return ctrl.Result{}, err
 	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
-
-	err = r.syncVarsConf(ctx, scope, plan)
-	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
-	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
-
-	err = r.syncOpsCluster(ctx, scope, plan)
-	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
-	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
-
 
 	if plan.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
@@ -265,6 +243,31 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		return reconcile.Result{}, err
 	}
 
+	err = r.syncHostConf(ctx, &log, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
+
+	err = r.syncVarsConf(ctx, &log, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
+
+	err = r.syncOpsCluster(ctx, &log, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
+
+	if plan.Spec.MachineExist {
+		return reconcile.Result{}, err
+	}
+
 	defer func() {
 		if !deletion {
 			if err := patchHelper.Patch(ctx, plan); err != nil {
@@ -275,7 +278,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		}
 
 	}()
-
 	// Handle non-deleted clusters
 	return r.reconcileNormal(ctx, scope, plan)
 }
@@ -446,7 +448,7 @@ func (r *PlanReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, p
 	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(plan, ecnsv1.GroupVersion.WithKind("Plan"))}
 }
 
-func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncHostConf(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
 	hostConf, err := utils.CreateHostConfConfigMap(ctx, r.Client, plan)
 	if err != nil {
 		return err
@@ -458,7 +460,7 @@ func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, p
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err = r.Client.Create(ctx, hostConf); err != nil {
-				scope.Logger.Error(err, "Create host conf configMap failed")
+				log.Error(err, "Create host conf configMap failed")
 				return err
 			}
 			return nil
@@ -466,14 +468,14 @@ func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, p
 	}
 	err = r.Client.Update(ctx, hostConf)
 	if err != nil {
-		scope.Logger.Error(err, "Update host conf configMap failed")
+		log.Error(err, "Update host conf configMap failed")
 		return err
 	}
 
 	return nil
 }
 
-func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncVarsConf(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
 	varsConf, err := utils.CreateVarsConfConfigMap(ctx, r.Client, plan)
 	if err != nil {
 		return err
@@ -486,7 +488,7 @@ func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, p
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err = r.Client.Create(ctx, varsConf); err != nil {
-				scope.Logger.Error(err, "Create vars conf configMap failed")
+				log.Error(err, "Create vars conf configMap failed")
 				return err
 			}
 			return nil
@@ -495,31 +497,35 @@ func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, p
 
 	err = r.Client.Update(ctx, varsConf)
 	if err != nil {
-		scope.Logger.Error(err, "Update vars conf configMap failed")
+		log.Error(err, "Update vars conf configMap failed")
 		return err
 	}
 
 	return nil
 }
 
-func (r *PlanReconciler) syncOpsCluster(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncOpsCluster(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
 	cluster := utils.CreateOpsCluster(plan)
-	r.SetOwnerReferences(&cluster.ObjectMeta, plan)
 	cl := &clusterv1alpha1.Cluster{}
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cl)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			r.SetOwnerReferences(&cluster.ObjectMeta, plan)
 			if err = r.Client.Create(ctx, cluster); err != nil {
-				scope.Logger.Error(err, "Create cluster failed")
+				log.Error(err, "Create cluster failed")
 				return err
 			}
 			return nil
 		}
 	}
 
-	err = r.Client.Update(ctx, cluster)
+	cl.Spec.HostsConfRef = cluster.Spec.HostsConfRef
+	cl.Spec.VarsConfRef = cluster.Spec.VarsConfRef
+	cl.Spec.SSHAuthRef = cluster.Spec.SSHAuthRef
+
+	err = r.Client.Update(ctx, cl)
 	if err != nil {
-		scope.Logger.Error(err, "Update cluster failed")
+		log.Error(err, "Update cluster failed")
 		return err
 	}
 
@@ -1308,48 +1314,50 @@ func (r *PlanReconciler) SetupWithManager(mgr ctrl.Manager, options controller.O
 }
 
 func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	// List all machineset for this plan
-	err := deleteHA(scope, plan)
+	if !plan.Spec.MachineExist {
+		// List all machineset for this plan
+		err := deleteHA(scope, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteCluster(ctx, r.Client, scope, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteMachineTemplate(ctx, r.Client, scope, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteCloudInitSecret(ctx, r.Client, scope, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteSSHKeySecert(ctx, scope, r.Client, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteAppCre(ctx, scope, r.Client, plan)
+		if err != nil {
+			return err
+		}
+
+		err = deleteSeverGroup(ctx, r.Client, scope, plan)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := deleteKubeanCluster(ctx, r.Client, scope, plan)
 	if err != nil {
 		return err
 	}
 
 	err = deleteClusterOperationSets(ctx, r.Client, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteCluster(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteMachineTemplate(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteCloudInitSecret(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteSSHKeySecert(ctx, scope, r.Client, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteAppCre(ctx, scope, r.Client, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteSeverGroup(ctx, r.Client, scope, plan)
-	if err != nil {
-		return err
-	}
-
-	err = deleteAnsibleCluster(ctx, r.Client, scope, plan)
 	if err != nil {
 		return err
 	}
@@ -1364,6 +1372,11 @@ func deleteClusterOperationSets(ctx context.Context, cli client.Client, plan *ec
 	if err != nil {
 		return err
 	}
+
+	if len(sets.Items) <= 0 {
+		return nil
+	}
+
 	for index, set := range sets.Items {
 		if set.Annotations[ecnsv1.KubeanAnnotation] != plan.Spec.ClusterName {
 			continue
@@ -1398,7 +1411,6 @@ func deleteClusterOperationSets(ctx context.Context, cli client.Client, plan *ec
 
 // 	return nil
 // }
-
 
 func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 	if plan.Spec.LBEnable {
@@ -1630,12 +1642,12 @@ func deleteSSHKeySecert(ctx context.Context, scope *scope.Scope, client client.C
 	return nil
 }
 
-func deleteAnsibleCluster(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
+func deleteKubeanCluster(ctx context.Context, client client.Client, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	cl := &clusterv1alpha1.Cluster{}
 	err := client.Get(ctx, types.NamespacedName{Namespace: plan.Namespace, Name: plan.Spec.ClusterName}, cl)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			scope.Logger.Error(err, "ansible cluster has already been deleted")
+			scope.Logger.Error(err, "kubean cluster has already been deleted")
 			return nil
 		}
 		return err

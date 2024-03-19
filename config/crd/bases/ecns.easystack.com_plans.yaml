@@ -252,6 +252,8 @@ spec:
                   - role
                   type: object
                 type: array
+              machineExist:
+                type: boolean
               mode:
                 type: string
               monitor:

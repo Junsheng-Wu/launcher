@@ -7,23 +7,61 @@ metadata:
     app.kubernetes.io/part-of: easystack-eks-op
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: easystack-eks-op
-  name: plan-sample
-  namespace: mj
+  name: kubean-cluster
+  namespace: test
 spec:
+  machineExist: true
   mode: "new"
   k8sVersion: "v1.26.4-es"
   support_python3: false
   lb_enable: false
-  cluster_name: "test2"
+  cluster_name: kubean-cluster
   ssh_key: "binshan"
   use_float_ip: false
   node_cidr: "10.6.0.0/24"
   other_ansible_opts:
-    "cloud_master_vip": "172.35.0.2"
-    "registry_ip": "172.35.0.73"
-    "webhook_enabled": "false"
-    "flannel_interface": "ens3"
-    "keepalived_interface": "ens3"
+    charts_repo_ip: 10.222.255.253
+    cloud_master_vip: 100.100.3.20
+    cloud_provider: external
+    container_lvm_enabled: "false"
+    data_dir: /kubernetes
+    dnscache_enabled: "true"
+    docker_repo_enabled: "false"
+    epel_enabled: "false"
+    etcd_data_dir: /kubernetes/etcd
+    flannel_interface: ens3
+    fs_server: 10.20.0.2
+    fs_server_ip: ""
+    harbor_admin_password: cY4EMha0EIpDA2cW
+    harbor_domain: hub.ecns.io
+    helm_enabled: "true"
+    ingress_virtual_vip: 100.100.3.126
+    istio_enabled: "false"
+    keepalived_interface: ens3
+    kube_network_plugin: flannel
+    kube_pods_subnet: 10.232.0.0/14
+    kube_service_addresses: 10.222.0.0/16
+    kubeadm_enabled: "false"
+    kubepods_reserve: "true"
+    local_storageclass: hdd
+    master_virtual_vip: 100.100.3.157
+    openstack_auth_domain: keystone.openstack.svc.cluster.local
+    openstack_cinder_domain: cinder.openstack.svc.cluster.local
+    openstack_nova_domain: nova.openstack.svc.cluster.local
+    openstack_password: Admin@ES20!8
+    openstack_project_domain_name: 南京
+    openstack_project_name: eks
+    openstack_region_name: RegionOne
+    openstack_user_app_cred_name: eks-kubean
+    openstack_user_name: admin
+    populate_inventory_to_hosts_file: "false"
+    preinstall_selinux_state: disabled
+    prometheus_pv_size: "10"
+    prometheus_retention_time: "7"
+    registry_ip: 172.38.0.2
+    upstream_nameservers: 114.114.114.114
+    vip_mgmt: 192.168.23.2
+    webhook_enabled: "false"
   need_keep_alive:
     - "master"
     - "ingress"
@@ -42,12 +80,15 @@ spec:
           volumes:
             - volume_type: "hdd"
               volume_size: 150
+              availability_zone: "default-az"
               index: 1
             - volume_type: "hdd"
               volume_size: 10
+              availability_zone: "default-az"
               index: 2
             - volume_type: "hdd"
               volume_size: 5
+              availability_zone: "default-az"
               index: 3
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
@@ -57,12 +98,15 @@ spec:
           volumes:
             - volume_type: "hdd"
               volume_size: 150
+              availability_zone: "default-az"
               index: 1
             - volume_type: "hdd"
               volume_size: 5
+              availability_zone: "default-az"
               index: 2
             - volume_type: "hdd"
               volume_size: 5
+              availability_zone: "default-az"
               index: 3
           image: "kylin-x86-raw-0816"
           flavor: "8C-8G"
@@ -75,12 +119,15 @@ spec:
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 150
               index: 1
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 10
               index: 2
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 5
               index: 3
           image: "kylin-x86-raw-0816"
@@ -94,12 +141,15 @@ spec:
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 150
               index: 1
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 10
               index: 2
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 5
               index: 3
           image: "kylin-x86-raw-0816"
@@ -113,12 +163,15 @@ spec:
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 150
               index: 1
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 10
               index: 2
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 5
               index: 3
           image: "kylin-x86-raw-0816"
@@ -132,12 +185,15 @@ spec:
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 150
               index: 1
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 10
               index: 2
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 5
               index: 3
           image: "kylin-x86-raw-0816"
@@ -151,12 +207,15 @@ spec:
           availability_zone: "default-az"
           volumes:
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 150
               index: 1
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 10
               index: 2
             - volume_type: "hdd"
+              availability_zone: "default-az"
               volume_size: 5
               index: 3
           image: "eks-kylin-gpu-accelerated-x86_64"
@@ -169,16 +228,39 @@ spec:
   cni_type: "flannel"
   pod_cidr: "10.232.0.0/14"
   svc_cidr: "10.222.0.0/16"
-  maxRetryTime: 5
-  ansible_plan_auto: true
   deleteVolumeOnTermination: true
+  hostConfName: cluster-ops-host-conf
+  varsConfName: cluster-ops-vars-conf
+  hostConf:
+    bastion:
+      ansibleHost: 100.100.3.157
+      ansibleIP: 100.100.3.157
+      memoryReserve: -4
+      name: kubean-node-1
+    etcd:
+      - kubean-node-1
+      - kubean-node-2
+      - kubean-node-3
+    kubeIngress:
+      - kubean-node-1
+    kubeMaster:
+      - kubean-node-1
+      - kubean-node-2
+      - kubean-node-3
+    nodePools:
+      - ansibleHost: 100.100.3.157
+        ansibleIP: 100.100.3.157
+        memoryReserve: -4
+        name: kubean-node-1
+      - ansibleHost: 100.100.3.130
+        ansibleIP: 100.100.3.130
+        memoryReserve: -4
+        name: kubean-node-2
+      - ansibleHost: 100.100.3.126
+        ansibleIP: 100.100.3.126
+        memoryReserve: -4
+        name: kubean-node-3
   user:
     auth_url: "http://keystone.openstack.svc.cluster.local/v3"
     token: "gAAAAABlEpbVA2fOaWDLer_WLjjau_Hv-7H6VfnlwdVTk4y-3kNTH5_WRJwa97eev7BfHApJVM_ak3PKDnDMWZ34v-pCjskjlh4-1DZf2tqj228IMAKuUC-XXLT9oJTjWYZJ0-Zfs6IMDVQOqJ95Q5bFF9KJwdfSaGFw8TR0C1PbB63vPXk4Uc4"
     region: "RegionOne"
-
-
-
-
-
-  # TODO(user): Add fields here

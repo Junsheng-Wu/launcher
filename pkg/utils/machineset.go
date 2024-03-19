@@ -396,12 +396,13 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 				} else {
 					openstackTemplate.Spec.Template.Spec.ServerGroupID = nodeGroup
 				}
-				//TODO create openstacktemplate resource
-				err = client.Create(ctx, &openstackTemplate)
-				if err != nil {
-					return err
-				}
 			}
+			//TODO create openstacktemplate resource
+			err = client.Create(ctx, &openstackTemplate)
+			if err != nil {
+				return err
+			}
+			return nil
 		}
 		return err
 	}

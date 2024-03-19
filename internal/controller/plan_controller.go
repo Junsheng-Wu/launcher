@@ -250,6 +250,7 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 				if apierrors.IsNotFound(err) {
 					return ctrl.Result{}, nil
 				}
+
 			}
 
 			// remove our finalizer from the list and update it.
@@ -295,9 +296,12 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	scope.Logger.Info("Reconciling plan openstack resource")
 
 	// get or create application credential
-	err := syncAppCre(ctx, scope, r.Client, plan)
+	needReQueue, err := syncAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if needReQueue {
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
 	// get or create sshkeys secret
@@ -338,8 +342,10 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 				if err != nil {
 					if err.Error() == "openstack cluster is not ready" {
 						scope.Logger.Info("Wait openstack cluster ready", "Namespace", machineSetNamespace, "Name", machineSetName)
+						r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanWaitingEvent, "Wait openstack network and so on ready")
 						return ctrl.Result{RequeueAfter: waitForClusterInfrastructureReadyDuration}, nil
 					}
+					scope.Logger.Info("Wait openstack cluster ready and get other error", "Namespace", machineSetNamespace, "Name", machineSetName)
 					return ctrl.Result{}, err
 				}
 				continue
@@ -775,7 +781,7 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 }
 
 // TODO sync app cre
-func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
+func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) (bool, error) {
 	// TODO get openstack application credential secret by name If not exist,then create openstack application credential and its secret.
 	// create openstack application credential
 	var (
@@ -787,7 +793,7 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		Region: scope.ProviderClientOpts.RegionName,
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = cli.Get(ctx, types.NamespacedName{Name: secretName, Namespace: plan.Namespace}, secret)
@@ -795,7 +801,7 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		if apierrors.IsNotFound(err) {
 			creId, appsecret, err := utils.CreateAppCre(ctx, scope, IdentityClient, secretName)
 			if err != nil {
-				return err
+				return false, err
 			}
 			var auth AuthConfig = AuthConfig{
 				ClusterName:   plan.Spec.ClusterName,
@@ -812,13 +818,13 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 			// Create a template object and parse the template string
 			t, err := template.New("auth").Parse(Authtmpl)
 			if err != nil {
-				return err
+				return false, err
 			}
 			var buf bytes.Buffer
 			// Execute the template and write the output to the file
 			err = t.Execute(&buf, auth)
 			if err != nil {
-				return err
+				return false, err
 			}
 			// base64 encode the buffer contents and return as a string
 			secretData["clouds.yaml"] = buf.Bytes()
@@ -833,12 +839,8 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 			}
 			err = cli.Create(ctx, secret)
 			if err != nil {
-				return err
+				return false, err
 			}
-			return nil
-
-		} else {
-			return err
 		}
 	}
 
@@ -849,11 +851,11 @@ func syncAppCre(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 			Name:      secretName,
 		}
 		if err = cli.Update(ctx, plan); err != nil {
-			return err
+			return false, err
 		}
-		return nil
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 // TODO sync create cluster
@@ -899,7 +901,7 @@ func syncCreateCluster(ctx context.Context, client client.Client, plan *ecnsv1.P
 				}
 			}
 
-			err := client.Create(ctx, &cluster)
+			err = client.Create(ctx, &cluster)
 			if err != nil {
 				return err
 			}
@@ -1386,12 +1388,13 @@ func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Sc
 	if err != nil {
 		return err
 	}
-	err = deleteAppCre(ctx, scope, r.Client, plan)
+
+	err = deleteSeverGroup(scope, plan)
 	if err != nil {
 		return err
 	}
 
-	err = deleteSeverGroup(scope, plan)
+	err = deleteAppCre(ctx, scope, r.Client, plan)
 	if err != nil {
 		return err
 	}

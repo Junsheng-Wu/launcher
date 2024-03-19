@@ -343,7 +343,6 @@ spec:
                     description: Token is the token of keystone,expired time is 6h
                     type: string
                 required:
-                - AuthSecretRef
                 - auth_url
                 - region
                 - token

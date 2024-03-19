@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	ecnsv1 "easystack.com/plan/api/v1"
@@ -141,13 +142,18 @@ func (s *Service) ReconcileLoadBalancer(openStackCluster *infrav1.OpenStackClust
 		}
 	}
 
-	plan.Status.PlanLoadBalancer = append(plan.Status.PlanLoadBalancer, &ecnsv1.LoadBalancer{
-		Name:         lb.Name,
-		ID:           lb.ID,
-		IP:           lb.VipAddress,
-		InternalIP:   lbFloatingIP,
-		AllowedCIDRs: allowedCIDRs,
-	})
+	// lbName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, setRole)
+	setRole, cutFlag := strings.CutPrefix(lbName, plan.Spec.ClusterName)
+	if cutFlag {
+		plan.Status.PlanLoadBalancer[setRole] = ecnsv1.LoadBalancer{
+			Name:         lb.Name,
+			ID:           lb.ID,
+			IP:           lb.VipAddress,
+			InternalIP:   lbFloatingIP,
+			AllowedCIDRs: allowedCIDRs,
+		}
+	}
+
 	return nil
 }
 

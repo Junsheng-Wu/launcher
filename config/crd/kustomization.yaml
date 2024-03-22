@@ -4,7 +4,6 @@
 resources:
 - bases/ecns.easystack.com_plans.yaml
 - bases/easystack.com_ansibleplans.yaml
-- bases/ecns.easystack.com.easystack.com_clusteroperationsets.yaml
 - bases/easystack.com_clusteroperationsets.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 

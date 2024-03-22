@@ -43,33 +43,11 @@ kube-node
 {{range .KubePrometheus}}
 {{.}}
 {{end}}
-[log]
-{{range .KubeLog}}
+{{range $key, $value := .ExtendGroups}}
+[{{$key}}]
+{{range $value}}
 {{.}}
 {{end}}
-[nvidia-accelerator]
-{{range .NvidiaAccelerator}}
-{{.}}
-{{end}}
-[hygon-accelerator]
-{{range .HygonAccelerator}}
-{{.}}
-{{end}}
-[ascend-accelerator]
-{{range .AscendAccelerator}}
-{{.}}
-{{end}}
-[esm]
-{{range .Esm}}
-{{.}}
-{{end}}
-[esm-ingress]
-{{range .EsmIngress}}
-{{.}}
-{{end}}
-[esm-egress]
-{{range .EsmEgress}}
-{{.}}
 {{end}}
 `
 

@@ -37,7 +37,6 @@ import (
 	"easystack.com/plan/pkg/utils"
 	clusteropenstackapis "github.com/easystack/cluster-api-provider-openstack/api/v1alpha6"
 	clusteropenstackerrors "github.com/easystack/cluster-api-provider-openstack/pkg/utils/errors"
-	"github.com/go-logr/logr"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/servergroups"
@@ -243,31 +242,6 @@ func (r *PlanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctr
 		return reconcile.Result{}, err
 	}
 
-	err = r.syncHostConf(ctx, &log, plan)
-	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
-	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
-
-	err = r.syncVarsConf(ctx, &log, plan)
-	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
-	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
-
-	err = r.syncOpsCluster(ctx, &log, plan)
-	if err != nil {
-		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
-		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
-	}
-	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
-
-	if plan.Spec.MachineExist {
-		return reconcile.Result{}, err
-	}
-
 	defer func() {
 		if !deletion {
 			if err := patchHelper.Patch(ctx, plan); err != nil {
@@ -333,8 +307,14 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 	// create all machineset Once
 	for _, set := range plan.Spec.MachineSets {
+		if len(set.Roles) <= 0 {
+			scope.Logger.Error(fmt.Errorf("MachineSet roles cannot be nil"), set.Name)
+			return ctrl.Result{}, err
+		}
+
+		roleName := utils.GetRolesName(set.Roles)
 		// check machineSet is existed
-		machineSetName := fmt.Sprintf("%s%s", plan.Spec.ClusterName, set.Role)
+		machineSetName := fmt.Sprintf("%s%s", plan.Spec.ClusterName, roleName)
 		machineSetNamespace := plan.Namespace
 		machineSet := &clusterapi.MachineSet{}
 		err = r.Client.Get(ctx, types.NamespacedName{Name: machineSetName, Namespace: machineSetNamespace}, machineSet)
@@ -355,15 +335,15 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 			return ctrl.Result{}, err
 		}
 		// skip create machineSet
-		scope.Logger.Info("Skip create machineSet", "Role", set.Role, "Namespace", machineSetNamespace, "Name", machineSetName)
+		scope.Logger.Info("Skip create machineSet", "Roles", set.Roles[0], "Namespace", machineSetNamespace, "Name", machineSetName)
 	}
 
 	plan.Status.InfraMachine = make(map[string]ecnsv1.InfraMachine)
 	// get or create HA port if needed
 	if !plan.Spec.LBEnable {
 		for _, set := range plan.Spec.MachineSets {
-			if SetNeedKeepAlived(set.Role, plan.Spec.NeedKeepAlive) {
-				err = syncHAPort(ctx, scope, r.Client, plan, set.Role)
+			if SetNeedKeepAlived(set.Roles, plan.Spec.NeedKeepAlive) {
+				err = syncHAPort(ctx, scope, r.Client, plan, set.Roles)
 				if err != nil {
 					return ctrl.Result{}, err
 				}
@@ -372,8 +352,8 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	} else {
 		plan.Status.PlanLoadBalancer = nil
 		for _, set := range plan.Spec.MachineSets {
-			if SetNeedLoadBalancer(set.Role, plan.Spec.NeedLoadBalancer) {
-				err = syncCreateLoadBalancer(ctx, scope, r.Client, plan, set.Role)
+			if SetNeedLoadBalancer(set.Roles, plan.Spec.NeedLoadBalancer) {
+				err = syncCreateLoadBalancer(ctx, scope, r.Client, plan, set.Roles)
 				if err != nil {
 					return ctrl.Result{}, err
 				}
@@ -410,7 +390,7 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 				if err != nil {
 					return ctrl.Result{}, err
 				}
-				if SetNeedKeepAlived(set.Role, plan.Spec.NeedKeepAlive) {
+				if SetNeedKeepAlived(set.Roles, plan.Spec.NeedKeepAlive) {
 					Pairs = append(Pairs, plan.Status.InfraMachine[index].HAPrivateIP)
 				}
 				Pairs = append(Pairs, plan.Spec.PodCidr)
@@ -426,7 +406,7 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	} else {
 		// add lb member
 		for _, set := range plan.Status.InfraMachine {
-			if SetNeedLoadBalancer(set.Role, plan.Spec.NeedLoadBalancer) {
+			if SetNeedLoadBalancer(set.Roles, plan.Spec.NeedLoadBalancer) {
 				err = syncMember(ctx, scope, r.Client, plan, &set)
 				if err != nil {
 					return ctrl.Result{}, err
@@ -436,10 +416,31 @@ func (r *PlanReconciler) reconcileNormal(ctx context.Context, scope *scope.Scope
 	}
 
 	// syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
-	err = syncConfig(ctx, scope, r.Client, plan)
+	plan, err = syncConfig(ctx, scope, r.Client, plan)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: waitForClusterInfrastructureReadyDuration}, err
 	}
+
+	err = r.syncHostConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s failed: %s", plan.Spec.HostConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create host conf configMap %s success", plan.Spec.HostConfName)
+
+	err = r.syncVarsConf(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s failed: %s", plan.Spec.VarsConfName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create vars conf configMap %s success", plan.Spec.VarsConfName)
+
+	err = r.syncOpsCluster(ctx, scope, plan)
+	if err != nil {
+		r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s failed: %s", plan.Spec.ClusterName, err.Error())
+		return reconcile.Result{RequeueAfter: RequeueAfter}, nil
+	}
+	r.EventRecorder.Eventf(plan, corev1.EventTypeNormal, PlanCreatedEvent, "Create ansible cluster %s success", plan.Spec.ClusterName)
 
 	return ctrl.Result{}, nil
 }
@@ -448,7 +449,7 @@ func (r *PlanReconciler) SetOwnerReferences(objectMetaData *metav1.ObjectMeta, p
 	objectMetaData.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(plan, ecnsv1.GroupVersion.WithKind("Plan"))}
 }
 
-func (r *PlanReconciler) syncHostConf(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncHostConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	hostConf, err := utils.CreateHostConfConfigMap(ctx, r.Client, plan)
 	if err != nil {
 		return err
@@ -460,7 +461,7 @@ func (r *PlanReconciler) syncHostConf(ctx context.Context, log *logr.Logger, pla
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err = r.Client.Create(ctx, hostConf); err != nil {
-				log.Error(err, "Create host conf configMap failed")
+				scope.Logger.Error(err, "Create host conf configMap failed")
 				return err
 			}
 			return nil
@@ -468,14 +469,14 @@ func (r *PlanReconciler) syncHostConf(ctx context.Context, log *logr.Logger, pla
 	}
 	err = r.Client.Update(ctx, hostConf)
 	if err != nil {
-		log.Error(err, "Update host conf configMap failed")
+		scope.Logger.Error(err, "Update host conf configMap failed")
 		return err
 	}
 
 	return nil
 }
 
-func (r *PlanReconciler) syncVarsConf(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncVarsConf(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	varsConf, err := utils.CreateVarsConfConfigMap(ctx, r.Client, plan)
 	if err != nil {
 		return err
@@ -488,7 +489,7 @@ func (r *PlanReconciler) syncVarsConf(ctx context.Context, log *logr.Logger, pla
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err = r.Client.Create(ctx, varsConf); err != nil {
-				log.Error(err, "Create vars conf configMap failed")
+				scope.Logger.Error(err, "Create vars conf configMap failed")
 				return err
 			}
 			return nil
@@ -497,14 +498,14 @@ func (r *PlanReconciler) syncVarsConf(ctx context.Context, log *logr.Logger, pla
 
 	err = r.Client.Update(ctx, varsConf)
 	if err != nil {
-		log.Error(err, "Update vars conf configMap failed")
+		scope.Logger.Error(err, "Update vars conf configMap failed")
 		return err
 	}
 
 	return nil
 }
 
-func (r *PlanReconciler) syncOpsCluster(ctx context.Context, log *logr.Logger, plan *ecnsv1.Plan) error {
+func (r *PlanReconciler) syncOpsCluster(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
 	cluster := utils.CreateOpsCluster(plan)
 	cl := &clusterv1alpha1.Cluster{}
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cl)
@@ -512,7 +513,7 @@ func (r *PlanReconciler) syncOpsCluster(ctx context.Context, log *logr.Logger, p
 		if apierrors.IsNotFound(err) {
 			r.SetOwnerReferences(&cluster.ObjectMeta, plan)
 			if err = r.Client.Create(ctx, cluster); err != nil {
-				log.Error(err, "Create cluster failed")
+				scope.Logger.Error(err, "Create cluster failed")
 				return err
 			}
 			return nil
@@ -525,7 +526,7 @@ func (r *PlanReconciler) syncOpsCluster(ctx context.Context, log *logr.Logger, p
 
 	err = r.Client.Update(ctx, cl)
 	if err != nil {
-		log.Error(err, "Update cluster failed")
+		scope.Logger.Error(err, "Update cluster failed")
 		return err
 	}
 
@@ -533,12 +534,73 @@ func (r *PlanReconciler) syncOpsCluster(ctx context.Context, log *logr.Logger, p
 }
 
 // syncConfig to generate some config file about kubean,like inventory configmap,vars configmap,auth configmap and clusters.kubean.io and check ClusterOperationSet
-func syncConfig(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
-	return nil
+func syncConfig(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) (*ecnsv1.Plan, error) {
+	var (
+		ansibleNodeList []*ecnsv1.AnsibleNode
+		bastion         *ecnsv1.AnsibleNode
+		masters         []string
+		workers         []string
+		etcds           []string
+		ingresses       []string
+		prometheuses    []string
+	)
+	for _, m := range plan.Status.InfraMachine {
+		var hostList []string
+		for hostName, ip := range m.IPs{
+			ansibleNodeList = append(ansibleNodeList, &ecnsv1.AnsibleNode{
+				Name: hostName,
+				AnsibleIP: ip,
+				AnsibleHost: hostName,
+				MemoryReserve: -4,
+			})
+			hostList = append(hostList, hostName)
+		}
+		for _, role := range m.Roles {
+			switch role {
+			case ecnsv1.MasterSetRole:
+				masters = append(masters, hostList...)
+			case ecnsv1.WorkSetRole:
+				workers = append(workers, hostList...)
+			case ecnsv1.EtcdSetRole:
+				etcds = append(etcds, hostList...)
+			case ecnsv1.IngressSetRole:
+				ingresses = append(ingresses, hostList...)
+			case ecnsv1.PrometheusSetRole:
+				prometheuses = append(prometheuses, hostList...)
+			}
+		}
+	}
+	bastion = &ecnsv1.AnsibleNode{
+		Name: plan.Status.Bastion.Name,
+		AnsibleHost: plan.Status.Bastion.Name,
+		AnsibleIP: plan.Status.Bastion.IP,
+		MemoryReserve: -4,
+	}
+	hostConf := ecnsv1.HostConf{
+		NodePools: ansibleNodeList,
+		Bastion: bastion,
+		KubeMaster: masters,
+		KubeNode: workers,
+		KubeIngress: ingresses,
+		KubePrometheus: prometheuses,
+		Etcd: etcds,
+	}
+	plan.Spec.HostConf = &hostConf
+	err := cli.Update(ctx, plan)
+	if err != nil {
+		scope.Logger.Error(err, "Sync plan hostConf config failed")
+		return nil, err
+	}
+	return plan, nil
 }
 
 func syncMember(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, setStatus *ecnsv1.InfraMachine) error {
-	if setStatus.Role == ecnsv1.MasterSetRole {
+	if len(setStatus.Roles) <= 0 {
+		return fmt.Errorf("MachineSet roles cannot be nil")
+	}
+
+	roleName :=utils.GetRolesName(setStatus.Roles)
+	if roleName == ecnsv1.MasterSetRole {
 		return nil
 	}
 	loadBalancerService, err := loadbalancer.NewService(scope)
@@ -550,7 +612,7 @@ func syncMember(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 	if err != nil {
 		return err
 	}
-	lbName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, setStatus.Role)
+	lbName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, roleName)
 	for openstackMachineName, ip := range setStatus.IPs {
 		// get openstack machine
 		var openstackMachine clusteropenstackapis.OpenStackMachine
@@ -572,9 +634,14 @@ func syncMember(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 	return nil
 }
 
-func syncCreateLoadBalancer(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, setRole string) error {
+func syncCreateLoadBalancer(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, roles []string) error {
+	if len(roles) <= 0 {
+		return fmt.Errorf("MachineSet roles cannot be nil")
+	}
+
+	roleName := utils.GetRolesName(roles)
 	// master lb not need create loadBalancer by plan operator
-	if setRole == ecnsv1.MasterSetRole {
+	if roleName == ecnsv1.MasterSetRole {
 		return nil
 	}
 	loadBalancerService, err := loadbalancer.NewService(scope)
@@ -589,7 +656,7 @@ func syncCreateLoadBalancer(ctx context.Context, scope *scope.Scope, cli client.
 	if err != nil {
 		return err
 	}
-	lbName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, setRole)
+	lbName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, roleName)
 	err = loadBalancerService.ReconcileLoadBalancer(&infra, plan, lbName, port)
 	if err != nil {
 		return err
@@ -598,7 +665,12 @@ func syncCreateLoadBalancer(ctx context.Context, scope *scope.Scope, cli client.
 	return nil
 }
 
-func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, setRole string) error {
+func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan, roles []string) error {
+	if len(roles) <= 0 {
+		return fmt.Errorf("MachineSet roles cannot be nil")
+	}
+	roleName := utils.GetRolesName(roles)
+
 	service, err := networking.NewService(scope)
 	if err != nil {
 		return err
@@ -610,7 +682,7 @@ func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		return err
 	}
 	net := openstackCluster.Status.Network
-	portName := fmt.Sprintf("%s-%s-%s", plan.Spec.ClusterName, setRole, "keepalived_vip_eth0")
+	portName := fmt.Sprintf("%s-%s-%s", plan.Spec.ClusterName, roleName, "keepalived_vip_eth0")
 	var sg []clusteropenstackapis.SecurityGroupParam
 	sg = append(sg, clusteropenstackapis.SecurityGroupParam{
 		Name: "default",
@@ -630,7 +702,7 @@ func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		return err
 	}
 	var InfraStatus ecnsv1.InfraMachine
-	InfraStatus.Role = setRole
+	InfraStatus.Roles = roles
 	InfraStatus.HAPortID = port.ID
 	InfraStatus.HAPrivateIP = port.FixedIPs[0].IPAddress
 	if fip != nil {
@@ -654,7 +726,7 @@ func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		}
 	}
 	// update cluster status if setRole is master
-	if setRole == ecnsv1.MasterSetRole {
+	if roleName == ecnsv1.MasterSetRole {
 		var cluster clusterapi.Cluster
 		err = cli.Get(ctx, types.NamespacedName{Name: plan.Spec.ClusterName, Namespace: plan.Namespace}, &cluster)
 		if err != nil {
@@ -674,26 +746,31 @@ func syncHAPort(ctx context.Context, scope *scope.Scope, cli client.Client, plan
 		}
 		scope.Logger.Info("Update cluster status", "ClusterName", plan.Spec.ClusterName, "Endpoint", cluster.Spec.ControlPlaneEndpoint.Host)
 	}
-	plan.Status.InfraMachine[setRole] = InfraStatus
+	plan.Status.InfraMachine[roleName] = InfraStatus
 	return nil
 }
 
 // SetNeedLoadBalancer get map existed key
-func SetNeedLoadBalancer(role string, alive []string) bool {
+func SetNeedLoadBalancer(roles []string, alive []string) bool {
 	for _, a := range alive {
-		if a == role {
-			return true
+		for _, b := range roles {
+			if a == b {
+				return true
+			}
 		}
 	}
 	return false
 
 }
 
-func SetNeedKeepAlived(role string, alive []string) bool {
+func SetNeedKeepAlived(roles []string, alive []string) bool {
 	for _, a := range alive {
-		if a == role {
-			return true
+		for _, b := range roles {
+			if a == b {
+				return true
+			}
 		}
+
 	}
 	return false
 
@@ -702,7 +779,14 @@ func SetNeedKeepAlived(role string, alive []string) bool {
 // TODO update plan status
 func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client, plan *ecnsv1.Plan) error {
 	// get all machineset
-	machineSetList := &clusterapi.MachineSetList{}
+	var (
+		machineSetList = &clusterapi.MachineSetList{}
+		mapPlanMachineSet = map[string]ecnsv1.MachineSetReconcile{}
+	)
+	for _, m := range plan.Spec.MachineSets {
+		mapPlanMachineSet[m.Name] = *m
+	}
+
 	labels := map[string]string{ecnsv1.MachineSetClusterLabelName: plan.Spec.ClusterName}
 	err := cli.List(ctx, machineSetList, client.InNamespace(plan.Namespace), client.MatchingLabels(labels))
 	if err != nil {
@@ -736,7 +820,7 @@ func updatePlanStatus(ctx context.Context, scope *scope.Scope, cli client.Client
 		// save pre status include HA information
 		originPlan := plan.DeepCopy()
 		plan.Status.InfraMachine[role] = ecnsv1.InfraMachine{
-			Role:        role,
+			Roles:       mapPlanMachineSet[m.Name].Roles,
 			PortIDs:     Ports,
 			IPs:         ips,
 			HAPortID:    originPlan.Status.InfraMachine[role].HAPortID,
@@ -896,7 +980,11 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 	var MSet *ecnsv1.MachineSetReconcile
 
 	for _, set := range plan.Spec.MachineSets {
-		if set.Role == ecnsv1.MasterSetRole {
+		if len(set.Roles) <= 0 {
+			return fmt.Errorf("MachineSet roles cannot be nil")
+		}
+		roleName := utils.GetRolesName(set.Roles)
+		if roleName == ecnsv1.MasterSetRole {
 			MSet = set
 		}
 	}
@@ -1051,11 +1139,14 @@ func syncCreateOpenstackCluster(ctx context.Context, client client.Client, plan 
 
 func isFusionArchitecture(sets []*ecnsv1.MachineSetReconcile) bool {
 	for _, set := range sets {
-		if set.Role == ecnsv1.IngressSetRole && set.Number != 0 {
+		if len(set.Roles) <= 1 {
 			return false
-		}
+		} else {
+			return true
+		}	
 	}
-	return true
+
+	return false
 }
 
 // TODO sync ssh key
@@ -1155,7 +1246,7 @@ func (r *PlanReconciler) syncMachine(ctx context.Context, sc *scope.Scope, cli c
 	planBind.Plan = plan
 	// 2. get every machineset replicas
 	for _, PlanSet := range plan.Spec.MachineSets {
-		setName := fmt.Sprintf("%s%s", plan.Spec.ClusterName, PlanSet.Role)
+		setName := fmt.Sprintf("%s%s", plan.Spec.ClusterName, PlanSet.Roles)
 		for _, ApiSet := range machineSetList.Items {
 			if ApiSet.Name == setName {
 				fakeSet := ApiSet.DeepCopy()
@@ -1314,45 +1405,43 @@ func (r *PlanReconciler) SetupWithManager(mgr ctrl.Manager, options controller.O
 }
 
 func (r *PlanReconciler) deletePlanResource(ctx context.Context, scope *scope.Scope, plan *ecnsv1.Plan) error {
-	if !plan.Spec.MachineExist {
-		// List all machineset for this plan
-		err := deleteHA(scope, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteCluster(ctx, r.Client, scope, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteMachineTemplate(ctx, r.Client, scope, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteCloudInitSecret(ctx, r.Client, scope, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteSSHKeySecert(ctx, scope, r.Client, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteAppCre(ctx, scope, r.Client, plan)
-		if err != nil {
-			return err
-		}
-
-		err = deleteSeverGroup(ctx, r.Client, scope, plan)
-		if err != nil {
-			return err
-		}
+	// List all machineset for this plan
+	err := deleteHA(scope, plan)
+	if err != nil {
+		return err
 	}
 
-	err := deleteKubeanCluster(ctx, r.Client, scope, plan)
+	err = deleteCluster(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteMachineTemplate(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteCloudInitSecret(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteSSHKeySecert(ctx, scope, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteAppCre(ctx, scope, r.Client, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteSeverGroup(ctx, r.Client, scope, plan)
+	if err != nil {
+		return err
+	}
+
+	err = deleteKubeanCluster(ctx, r.Client, scope, plan)
 	if err != nil {
 		return err
 	}
@@ -1420,7 +1509,11 @@ func deleteHA(scope *scope.Scope, plan *ecnsv1.Plan) error {
 			return err
 		}
 		for _, set := range plan.Spec.MachineSets {
-			loadbalancerName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, set.Role)
+			if len(set.Roles) <= 0 {
+				return fmt.Errorf("MachineSet roles cannot be nil")
+			}
+			roleName := utils.GetRolesName(set.Roles)
+			loadbalancerName := fmt.Sprintf("%s-%s", plan.Spec.ClusterName, roleName)
 			err = service.DeleteLoadBalancer(plan, loadbalancerName)
 			if err != nil {
 				return err

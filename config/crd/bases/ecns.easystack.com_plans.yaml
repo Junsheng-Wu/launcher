@@ -89,13 +89,15 @@ spec:
                     items:
                       type: string
                     type: array
+                  extendGroups:
+                    additionalProperties:
+                      items:
+                        type: string
+                      type: array
+                    description: ExtendGroups is the extended node group
+                    type: object
                   kubeIngress:
                     description: KubeIngress is the kube ingress group
-                    items:
-                      type: string
-                    type: array
-                  kubeLog:
-                    description: KubeLog is the kube log group
                     items:
                       type: string
                     type: array
@@ -245,15 +247,15 @@ spec:
                       type: integer
                     role:
                       description: Role is the role of machine
-                      type: string
+                      items:
+                        type: string
+                      type: array
                   required:
                   - name
                   - number
                   - role
                   type: object
                 type: array
-              machineExist:
-                type: boolean
               mode:
                 type: string
               monitor:
@@ -711,7 +713,9 @@ spec:
                       type: array
                     role:
                       description: Role is the role of machine
-                      type: string
+                      items:
+                        type: string
+                      type: array
                   type: object
                 description: InfraMachine is the list of infra machine,key is set
                   role name,value is the InfraMachine

@@ -61,6 +61,12 @@ const (
 	NetWorkNew   = "new"
 )
 
+// VolumeTypeDefault set as VolumeType default value
+const (
+	VolumeTypeDefault     = "hdd"
+	VolumeTypeDefaultSize = 40
+)
+
 // PlanSpec defines the desired state of Plan
 type PlanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -187,6 +193,7 @@ type AnsibleNode struct {
 // include AuthUrl
 // include Token
 // include Region
+
 type User struct {
 	// AuthUrl is the auth url of keystone
 	AuthUrl string `json:"auth_url"`
@@ -194,6 +201,8 @@ type User struct {
 	Token string `json:"token"`
 	// Region is the region of keystone
 	Region string `json:"region"`
+	// secretRef is the secret of keystone appCre
+	AuthSecretRef *SecretRef `json:"authSecretRef,omitempty"`
 }
 
 // MonitorConfig is the monitor other config
@@ -217,8 +226,8 @@ type MachineSetReconcile struct {
 	Name string `json:"name"`
 	// Number is the number of all machine
 	Number int32 `json:"number"`
-	// Role is the role of machine
-	Roles []string `json:"role"`
+	// Roles are the roles of machine
+	Roles []string `json:"roles"`
 	// Infras is the infras of machine
 	Infra []*Infras `json:"infras,omitempty"`
 	// CloudInit is the cloud init secret of machine,base64 file,can use it to config the machine
@@ -242,8 +251,10 @@ type Infras struct {
 	Image string `json:"image"`
 	// Flavor is the flavor of machine
 	Flavor string `json:"flavor"`
-	// replica is the replica of machine
+	// Replica is the replica of machine
 	Replica int32 `json:"replica"`
+	// Metadata mapping. Allows you to create a map of key value pairs to add to the server instance.
+	ServerMetadata map[string]string `json:"serverMetadata,omitempty"`
 }
 
 type volume struct {
@@ -274,13 +285,13 @@ type PlanStatus struct {
 	//ServerGroupID is the server group id of cluster
 	ServerGroupID *Servergroups `json:"server_group_id,omitempty"`
 	// Phase is the plan phase
-	Phase map[PlanType]PlanPhase `json:"phase"`
+	Phase map[PlanType]PlanPhase `json:"phase,omitempty"`
 	// VMFailureReason is the error which vm was created
 	VMFailureReason map[string]MachineFailureReason `json:"VMFailureReason,omitempty"`
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
 	InfraMachine map[string]InfraMachine `json:"infra_machine,omitempty"`
 	// PlanLoadBalancer is the list of load balancer of plan
-	PlanLoadBalancer []*LoadBalancer `json:"planLoadBalancer,omitempty"`
+	PlanLoadBalancer map[string]LoadBalancer `json:"planLoadBalancer,omitempty"`
 	// Bastion is the bastion of plan
 	Bastion *clusteropenstack.Instance `json:"bastion,omitempty"`
 }
@@ -325,8 +336,8 @@ type LoadBalancer struct {
 }
 
 type InfraMachine struct {
-	// Role is the role of machine
-	Roles []string `json:"role,omitempty"`
+	// Roles is the roles of machine
+	Roles []string `json:"roles,omitempty"`
 	// PortIDs is the port id of machines
 	PortIDs []string `json:"port_ids,omitempty"`
 	// IPs is the ips of machine,key is the instance name(openstackMachine name),value is the ip

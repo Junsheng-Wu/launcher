@@ -175,9 +175,15 @@ spec:
                             description: image is the image of machine
                             type: string
                           replica:
-                            description: replica is the replica of machine
+                            description: Replica is the replica of machine
                             format: int32
                             type: integer
+                          serverMetadata:
+                            additionalProperties:
+                              type: string
+                            description: Metadata mapping. Allows you to create a
+                              map of key value pairs to add to the server instance.
+                            type: object
                           subnets:
                             description: subnets are a set of subnets for machines
                               decide the every machine's subnet when NetMode == existed,
@@ -245,15 +251,15 @@ spec:
                       description: Number is the number of all machine
                       format: int32
                       type: integer
-                    role:
-                      description: Role is the role of machine
+                    roles:
+                      description: Roles are the roles of machine
                       items:
                         type: string
                       type: array
                   required:
                   - name
                   - number
-                  - role
+                  - roles
                   type: object
                 type: array
               mode:
@@ -323,6 +329,17 @@ spec:
                   auth_url:
                     description: AuthUrl is the auth url of keystone
                     type: string
+                  authSecretRef:
+                    description: secretRef is the secret of keystone appCre
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   region:
                     description: Region is the region of keystone
                     type: string
@@ -711,8 +728,8 @@ spec:
                       items:
                         type: string
                       type: array
-                    role:
-                      description: Role is the role of machine
+                    roles:
+                      description: Roles is the roles of machine
                       items:
                         type: string
                       type: array
@@ -726,8 +743,7 @@ spec:
                 description: Phase is the plan phase
                 type: object
               planLoadBalancer:
-                description: PlanLoadBalancer is the list of load balancer of plan
-                items:
+                additionalProperties:
                   description: LoadBalancer represents basic information about the
                     associated OpenStack LoadBalancer.
                   properties:
@@ -749,7 +765,8 @@ spec:
                   - ip
                   - name
                   type: object
-                type: array
+                description: PlanLoadBalancer is the list of load balancer of plan
+                type: object
               server_group_id:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
@@ -764,8 +781,6 @@ spec:
                       machine
                     type: string
                 type: object
-            required:
-            - phase
             type: object
         type: object
     served: true

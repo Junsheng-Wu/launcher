@@ -30,7 +30,7 @@ import (
 
 // NewClientFromPlan token Auth form plan.spec.User get Client
 func NewClientFromPlan(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) (*gophercloud.ProviderClient, *clientconfig.ClientOpts, string, string, error) {
-	if !plan.Spec.UserInfo.AuthSecretRef.IsEmpty() {
+	if !plan.Spec.UserInfo.AuthSecretRef.IsEmpty() && plan.GetDeletionTimestamp() == nil {
 		cloud, _, err := capoprovider.GetCloudFromSecret(ctx, cli, plan.Spec.UserInfo.AuthSecretRef.NameSpace, plan.Spec.UserInfo.AuthSecretRef.Name, plan.Spec.ClusterName)
 		if err != nil {
 			return nil, nil, "", "", err

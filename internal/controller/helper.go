@@ -17,6 +17,7 @@ const (
 	ClusterOperationsDeleteEvent   = "ClusterOperationsDelete"
 
 	PlanStartEvent        = "PlanStart"
+	PlanWaitingEvent      = "PlanPending"
 	PlanCreatedEvent      = "PlanCreated"
 	PlanDeleteEvent       = "PlanDeleted"
 	PlanDeleteSshKeyEvent = "AnsiblePlanDeleteSshKey"

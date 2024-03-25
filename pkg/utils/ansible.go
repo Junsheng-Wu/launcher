@@ -47,11 +47,29 @@ kube-node
 {{range .KubeLog}}
 {{.}}
 {{end}}
-{{range $key, $value := .OtherGroup}}
-[{{$key}}]
-{{range $value}}
+[nvidia-accelerator]
+{{range .NvidiaAccelerator}}
 {{.}}
 {{end}}
+[hygon-accelerator]
+{{range .HygonAccelerator}}
+{{.}}
+{{end}}
+[ascend-accelerator]
+{{range .AscendAccelerator}}
+{{.}}
+{{end}}
+[esm]
+{{range .Esm}}
+{{.}}
+{{end}}
+[esm-ingress]
+{{range .EsmIngress}}
+{{.}}
+{{end}}
+[esm-egress]
+{{range .EsmEgress}}
+{{.}}
 {{end}}
 `
 
@@ -60,14 +78,14 @@ node_resources:
   {{range .HostConf.NodePools}}
   {{.Name}}: {memory: {{.MemoryReserve}}}
   {{end}}
-kube_version: {{.Version}}
-{{range $key, $value := .Install.OtherAnsibleOpts}}
+kube_version: {{.K8sVersion}}
+{{range $key, $value := .OtherAnsibleOpts}}
 {{$key}}: {{$value}}
 {{end}}
 `
 
 func CreateHostConfConfigMap(ctx context.Context, cli client.Client, plan *ecnsv1.Plan) (*corev1.ConfigMap, error) {
-	t, err := template.New("inventory").Parse(AnsibleInventory)
+	t, err := template.New("hostConf").Parse(AnsibleInventory)
 	if err != nil {
 		return nil, err
 	}

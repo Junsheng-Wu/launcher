@@ -51,7 +51,7 @@ const (
 	PrometheusSetRole = "prometheus"
 	IngressSetRole    = "ingress"
 	LogSetRole        = "log"
-	Etcd              = "etcd"
+	EtcdSetRole       = "etcd"
 )
 
 type NetWorkMode string
@@ -153,8 +153,6 @@ type PlanSpec struct {
 
 	// VarsConfName is the name of varsConf configMap
 	VarsConfName string `json:"varsConfName,omitempty"`
-
-	MachineExist bool `json:"machineExist,omitempty"`
 }
 
 type HostConf struct {
@@ -174,20 +172,8 @@ type HostConf struct {
 	KubeIngress []string `json:"kubeIngress,omitempty"`
 	// KubePrometheus is the kube prometheus group
 	KubePrometheus []string `json:"kubePrometheus,omitempty"`
-	// KubeLog is the kube log group
-	KubeLog []string `json:"kubeLog,omitempty"`
-	// NvidiaAccelerator is the nvidia accelerator group
-	NvidiaAccelerator []string `json:"nvidiaAccelerator,omitempty"`
-	// HygonAccelerator is the hygon accelerator group
-	HygonAccelerator []string `json:"hygonAccelerator,omitempty"`
-	// AscendAccelerator is the ascend accelerator group
-	AscendAccelerator []string `json:"ascendAccelerator,omitempty"`
-	// Esm is the esm group
-	Esm        []string `json:"esm,omitempty"`
-	// EsmIngress is the esm ingress group
-	EsmIngress []string `json:"esmIngress,omitempty"`
-	// EsmEgress is the esm egress group
-	EsmEgress  []string `json:"esmEgress,omitempty"`
+	// ExtendGroups is the extended node group
+	ExtendGroups map[string][]string `json:"extendGroups,omitempty"`
 }
 
 type AnsibleNode struct {
@@ -216,7 +202,7 @@ type User struct {
 	// Region is the region of keystone
 	Region string `json:"region"`
 	// secretRef is the secret of keystone appCre
-	AuthSecretRef *SecretRef `json:"AuthSecretRef,omitempty"`
+	AuthSecretRef *SecretRef `json:"authSecretRef,omitempty"`
 }
 
 // MonitorConfig is the monitor other config
@@ -240,8 +226,8 @@ type MachineSetReconcile struct {
 	Name string `json:"name"`
 	// Number is the number of all machine
 	Number int32 `json:"number"`
-	// Role is the role of machine
-	Role string `json:"role"`
+	// Roles are the roles of machine
+	Roles []string `json:"roles"`
 	// Infras is the infras of machine
 	Infra []*Infras `json:"infras,omitempty"`
 	// CloudInit is the cloud init secret of machine,base64 file,can use it to config the machine
@@ -299,7 +285,7 @@ type PlanStatus struct {
 	//ServerGroupID is the server group id of cluster
 	ServerGroupID *Servergroups `json:"server_group_id,omitempty"`
 	// Phase is the plan phase
-	Phase map[PlanType]PlanPhase `json:"phase"`
+	Phase map[PlanType]PlanPhase `json:"phase,omitempty"`
 	// VMFailureReason is the error which vm was created
 	VMFailureReason map[string]MachineFailureReason `json:"VMFailureReason,omitempty"`
 	// InfraMachine is the list of infra machine,key is set role name,value is the InfraMachine
@@ -350,8 +336,8 @@ type LoadBalancer struct {
 }
 
 type InfraMachine struct {
-	// Role is the role of machine
-	Role string `json:"role,omitempty"`
+	// Roles is the roles of machine
+	Roles []string `json:"roles,omitempty"`
 	// PortIDs is the port id of machines
 	PortIDs []string `json:"port_ids,omitempty"`
 	// IPs is the ips of machine,key is the instance name(openstackMachine name),value is the ip

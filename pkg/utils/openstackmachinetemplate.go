@@ -27,6 +27,7 @@ type AdoptInfra struct {
 // GetAdoptInfra TODO return need to up or down replicas and infra uid name.key is uid of infra,value is replicas,include negative number
 func GetAdoptInfra(ctx context.Context, cli client.Client, target *ecnsv1.MachineSetReconcile, plan *ecnsv1.Plan) (map[string]AdoptInfra, error) {
 	var result = make(map[string]AdoptInfra)
+	roleName := GetRolesName(target.Roles)
 	for _, in := range target.Infra {
 		var om clusteropenstack.OpenStackMachineList
 		// filter openstackMachine by
@@ -44,7 +45,7 @@ func GetAdoptInfra(ctx context.Context, cli client.Client, target *ecnsv1.Machin
 				return nil, err
 			}
 			// need skip openstackMachine that is being deleted
-			if o.Annotations[TemplateClonedFromNameAnnotation] == fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, target.Role, in.UID) && (o.ObjectMeta.DeletionTimestamp == nil) {
+			if o.Annotations[TemplateClonedFromNameAnnotation] == fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, in.UID) && (o.ObjectMeta.DeletionTimestamp == nil) {
 				hasCheck++
 				if ownerMachine.Annotations[DeleteMachineAnnotation] == "true" {
 					machineHasDeleted++

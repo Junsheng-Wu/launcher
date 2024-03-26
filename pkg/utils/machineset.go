@@ -138,7 +138,8 @@ func AddReplicas(ctx context.Context, scope *scope.Scope, cli client.Client, tar
 	actual.Spec.Template.Spec.FailureDomain = &infra.AvailabilityZone
 	actual.Spec.Template.Spec.InfrastructureRef.APIVersion = Clusteropenstackapi
 	actual.Spec.Template.Spec.InfrastructureRef.Kind = Clusteropenstackkind
-	actual.Spec.Template.Spec.InfrastructureRef.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, target.Role, infra.UID)
+	roleName := GetRolesName(target.Roles)
+	actual.Spec.Template.Spec.InfrastructureRef.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, infra.UID)
 	err = PatchMachineSet(ctx, cli, origin, &actual)
 	if err != nil {
 		return err
@@ -193,7 +194,8 @@ func SubReplicas(ctx context.Context, scope *scope.Scope, cli client.Client, tar
 	actual.Spec.Template.Spec.FailureDomain = &infra.AvailabilityZone
 	actual.Spec.Template.Spec.InfrastructureRef.APIVersion = Clusteropenstackapi
 	actual.Spec.Template.Spec.InfrastructureRef.Kind = Clusteropenstackkind
-	actual.Spec.Template.Spec.InfrastructureRef.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, target.Role, infra.UID)
+	roleName := GetRolesName(target.Roles)
+	actual.Spec.Template.Spec.InfrastructureRef.Name = fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, infra.UID)
 	err = PatchMachineSet(ctx, cli, origin, &actual)
 	if err != nil {
 		return err
@@ -291,13 +293,14 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 		return errNew.New("index out of range infra")
 	}
 
+	roleName := GetRolesName(set.Roles)
 	infra := set.Infra[index]
 	// get openstacktemplate by name ,if not exist,create it
 	var openstackTemplate clusteropenstackapis.OpenStackMachineTemplate
 	// get openstacktemplate by filiter from cache
 	err := client.Get(ctx, types.NamespacedName{
 		Namespace: plan.Namespace,
-		Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
+		Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, infra.UID),
 	}, &openstackTemplate)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -309,7 +312,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 						LabelTemplateInfra:    infra.UID,
 						LabelEasyStackCluster: plan.Spec.ClusterName,
 					},
-					Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
+					Name:      fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, infra.UID),
 					Namespace: plan.Namespace,
 				},
 				Spec: clusteropenstackapis.OpenStackMachineTemplateSpec{
@@ -391,7 +394,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 					// dont config subnet
 				}
 
-				if set.Role == "master" {
+				if roleName == ecnsv1.MasterSetRole {
 					openstackTemplate.Spec.Template.Spec.ServerGroupID = masterGroup
 				} else {
 					openstackTemplate.Spec.Template.Spec.ServerGroupID = nodeGroup
@@ -556,13 +559,13 @@ func getOrCreateCloudInitSecret(ctx context.Context, client client.Client, plan 
 // TODO create a new machineset replicas==0,deletePolicy==Newest,one machineset for one plan.spec.machinesetsReconcile
 func createMachineset(ctx context.Context, client client.Client, plan *ecnsv1.Plan, set *ecnsv1.MachineSetReconcile, index int) error {
 	infra := set.Infra[index]
-
+	roleName := GetRolesName(set.Roles)
 	var (
 		re                int32  = 0
 		cloud_secret_name string = fmt.Sprintf("%s-%s-cloudinit", plan.Spec.ClusterName, set.Name)
 		machineSet               = clusterapi.MachineSet{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s%s", plan.Spec.ClusterName, set.Role),
+				Name:      fmt.Sprintf("%s%s", plan.Spec.ClusterName, roleName),
 				Namespace: plan.Namespace,
 			},
 			Spec: clusterapi.MachineSetSpec{
@@ -589,7 +592,7 @@ func createMachineset(ctx context.Context, client client.Client, plan *ecnsv1.Pl
 						InfrastructureRef: corev1.ObjectReference{
 							APIVersion: Clusteropenstackapi,
 							Kind:       Clusteropenstackkind,
-							Name:       fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, set.Role, infra.UID),
+							Name:       fmt.Sprintf("%s%s%s", plan.Spec.ClusterName, roleName, infra.UID),
 						},
 						Version: &plan.Spec.K8sVersion,
 					},
@@ -598,13 +601,13 @@ func createMachineset(ctx context.Context, client client.Client, plan *ecnsv1.Pl
 		}
 	)
 
-	if plan.Spec.UseFloatIP && set.Role == ecnsv1.MasterSetRole {
+	if plan.Spec.UseFloatIP && roleName == ecnsv1.MasterSetRole {
 		machineSet.Spec.Template.ObjectMeta.Annotations = map[string]string{
 			"machinedeployment.clusters.x-k8s.io/fip": "enable",
 		}
 	}
 
-	if set.Role == ecnsv1.MasterSetRole || set.Role == ecnsv1.Etcd {
+	if roleName == ecnsv1.MasterSetRole || roleName == ecnsv1.EtcdSetRole {
 		machineSet.Spec.Template.Labels[ecnsv1.MachineControlPlaneLabelName] = "true"
 	}
 	err := client.Create(ctx, &machineSet)
@@ -612,4 +615,17 @@ func createMachineset(ctx context.Context, client client.Client, plan *ecnsv1.Pl
 		return err
 	}
 	return nil
+}
+
+func GetRolesName(roles []string) string {
+	if len(roles) <= 0 {
+		return ""
+	}
+	for _, r := range roles {
+		if r == ecnsv1.MasterSetRole {
+			return ecnsv1.MasterSetRole
+		}
+	}
+
+	return roles[0]
 }

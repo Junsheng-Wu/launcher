@@ -124,11 +124,7 @@ type PlanMachineSetBind struct {
 //+kubebuilder:rbac:groups="",resources=secrets;,verbs=get;create;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=get;list;watch;create;update;patch
 
-// Reconcile is part of the 
-
-
-
-kubernetes reconciliation loop which aims to
+// Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
 // the Plan object against the actual cluster state, and then
@@ -1687,4 +1683,3 @@ func deleteKubeanCluster(ctx context.Context, client client.Client, scope *scope
 
 	return nil
 }
-

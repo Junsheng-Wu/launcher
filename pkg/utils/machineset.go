@@ -394,7 +394,7 @@ func getOrCreateOpenstackTemplate(ctx context.Context, scope *scope.Scope, clien
 					// dont config subnet
 				}
 
-				if roleName == "master" {
+				if roleName == ecnsv1.MasterSetRole {
 					openstackTemplate.Spec.Template.Spec.ServerGroupID = masterGroup
 				} else {
 					openstackTemplate.Spec.Template.Spec.ServerGroupID = nodeGroup

@@ -621,8 +621,8 @@ func GetRolesName(roles []string) string {
 		return ""
 	}
 	for _, r := range roles {
-		if r == "master" {
-			return "master"
+		if r == ecnsv1.MasterSetRole {
+			return ecnsv1.MasterSetRole
 		}
 	}
 
